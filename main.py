@@ -9,48 +9,80 @@ import chess.pgn
 
 from cache import EvalCache, ProcessedGames, SeenStore
 from evaluate import STOCKFISH_PATH
+from openings import OpeningClassifier
 from filters import (
     FromMoveNumber,
     MinElo,
     MissedZwischenzug,
     NotYetProcessedGame,
     NotYetSeen,
+    OpeningPositionMatches,
+    PawnStructureMatches,
     PlayedMoveLossAtLeast,
     PositionContext,
     PositionEvalInRange,
+    UntilMoveNumber,
     ZwischenzugAvailable,
     find_positions,
 )
 
 TWIC_DIR = Path(__file__).parent / "twic"
 EVAL_DB = Path(__file__).parent / "eval_cache.db"
+ECO_DIR = Path(__file__).parent / "data" / "eco"
+OPENING_CLASSIFIER = OpeningClassifier(ECO_DIR) if ECO_DIR.is_dir() else None
 TIE_TOLERANCE_CP = 20
 STOCKFISH_THREADS = 8
 STOCKFISH_HASH_MB = 4096
 
 # Předvolby hledání — toggle změnou SEARCH_MODE.
-SEARCH_MODE = "zwischenzug_available"  # "blunder" | "zwischenzug" | "zwischenzug_available"
+SEARCH_MODE = "pawn_structure"  # "blunder" | "zwischenzug" | "zwischenzug_available" | "pawn_structure"
 
 # TEST_MODE: vypne Elo gate + balanced-eval gate, ať projdou ručně připravené partie
 # bez Elo a v libovolné fázi. Pro běh nad TWIC nech False.
 TEST_MODE = False
 
+# Konfigurace pro pawn_structure mód — jen pěšcová struktura, bez vázání na zahájení.
+# FEN může obsahovat i jiné figury (bišopy atd.) — rule bere v úvahu jen pěšce.
+PAWN_STRUCTURE_FEN = "8/8/8/8/8/1P4P1/PB4BP/8 w - - 0 1"
+PAWN_STRUCTURE = PawnStructureMatches(PAWN_STRUCTURE_FEN)
+PAWN_STRUCTURE_MAX_FULLMOVE = 10  # struktura musí vzniknout do 10. tahu
+
 SEARCHES = {
-    "blunder": [
-        FromMoveNumber(threshold=10),
-        PositionEvalInRange(min_cp=-100, max_cp=100),
-        PlayedMoveLossAtLeast(min_loss_cp=100, tie_tolerance_cp=TIE_TOLERANCE_CP),
-    ],
-    "zwischenzug": [
-        FromMoveNumber(threshold=10),
-        PositionEvalInRange(min_cp=-100, max_cp=100),
-        MissedZwischenzug(min_loss_cp=100),
-    ],
-    "zwischenzug_available": [
-        FromMoveNumber(threshold=10),
-        PositionEvalInRange(min_cp=-100, max_cp=100),
-        ZwischenzugAvailable(min_gain_cp=100),
-    ],
+    "blunder": {
+        "game": [MinElo(threshold=2500, both=True)],
+        "position": [
+            FromMoveNumber(threshold=10),
+            PositionEvalInRange(min_cp=-100, max_cp=100),
+            PlayedMoveLossAtLeast(min_loss_cp=100, tie_tolerance_cp=TIE_TOLERANCE_CP),
+        ],
+        "max_per_game": None,
+    },
+    "zwischenzug": {
+        "game": [MinElo(threshold=2500, both=True)],
+        "position": [
+            FromMoveNumber(threshold=10),
+            PositionEvalInRange(min_cp=-100, max_cp=100),
+            MissedZwischenzug(min_loss_cp=100),
+        ],
+        "max_per_game": None,
+    },
+    "zwischenzug_available": {
+        "game": [MinElo(threshold=2500, both=True)],
+        "position": [
+            FromMoveNumber(threshold=10),
+            PositionEvalInRange(min_cp=-100, max_cp=100),
+            ZwischenzugAvailable(min_gain_cp=100),
+        ],
+        "max_per_game": None,
+    },
+    "pawn_structure": {
+        "game": [],
+        "position": [
+            UntilMoveNumber(threshold=PAWN_STRUCTURE_MAX_FULLMOVE),
+            PAWN_STRUCTURE,
+        ],
+        "max_per_game": 1,  # jednu pozici z partie (první výskyt struktury) stačí
+    },
 }
 
 
@@ -151,19 +183,54 @@ def print_candidate(i: int, ctx: PositionContext) -> None:
     print(f"      hodnocení po tomto tahu:     {played_white/100:+.2f}  (z bílého)")
 
 
+def print_structure_candidate(i: int, ctx: PositionContext) -> None:
+    """Výpis pro pawn_structure mód — bez engine analýzy, jen kontext + tahy."""
+    h = ctx.game.headers
+    event = h.get("Event", "?")
+    year = h.get("Date", "?").split(".")[0]
+    result = h.get("Result", "*")
+    moves = format_moves(ctx.game)
+
+    opening_str = "(neidentifikováno)"
+    if OPENING_CLASSIFIER is not None:
+        detected = OPENING_CLASSIFIER.classify(ctx.game)
+        if detected:
+            opening_str = f"{detected[0]} · {detected[1]}"
+    if opening_str == "(neidentifikováno)":
+        # fallback: zkus PGN hlavičky
+        parts = []
+        for key in ("ECO", "Opening", "Variation"):
+            v = h.get(key, "")
+            if v and v != "?":
+                parts.append(v)
+        if parts:
+            opening_str = " · ".join(parts) + "  (z PGN)"
+
+    print(f"\n=== Partie #{i} ===")
+    print(f"  {h.get('White','?')} – {h.get('Black','?')}   [{event}, {year}]")
+    print(f"  Zahájení: {opening_str}")
+    print(f"  Výsledek: {result}")
+    print(f"  FEN při výskytu struktury (tah č. {ctx.fullmove_number}):")
+    print(f"    {ctx.board.fen()}")
+    print(f"  Tahy:")
+    print(f"    {moves} {result}")
+
+
 def main() -> None:
     if not TWIC_DIR.is_dir():
         raise SystemExit(f"Directory not found: {TWIC_DIR}")
 
-    game_rules = [] if TEST_MODE else [MinElo(threshold=2500, both=True)]
-    position_rules = [
-        r for r in SEARCHES[SEARCH_MODE]
-        if not (TEST_MODE and isinstance(r, PositionEvalInRange))
-    ]
+    config = SEARCHES[SEARCH_MODE]
+    game_rules = list(config["game"])
+    position_rules = list(config["position"])
+    if TEST_MODE:
+        # vypni gate filtry (Elo + balanced eval), nech jen pravidla specifická pro mód
+        game_rules = [r for r in game_rules if not isinstance(r, MinElo)]
+        position_rules = [r for r in position_rules if not isinstance(r, PositionEvalInRange)]
     depth = 18
     multipv = 3
     limit = None
-    max_per_game = None
+    max_per_game = config.get("max_per_game")
 
     with SeenStore(EVAL_DB) as seen, ProcessedGames(EVAL_DB) as processed:
         if TEST_MODE:
@@ -188,6 +255,8 @@ def main() -> None:
                         depth, multipv, processed,
                     )
                 else:
+                    printer = print_structure_candidate if SEARCH_MODE == "pawn_structure" else print_candidate
+                    verbose = SEARCH_MODE != "pawn_structure"  # pawn_structure je rychlé, heartbeat zbytečný
                     for i, ctx in enumerate(
                         find_positions(
                             iter_games(TWIC_DIR),
@@ -198,10 +267,11 @@ def main() -> None:
                             multipv=multipv,
                             limit=limit,
                             max_per_game=max_per_game,
+                            verbose=verbose,
                         ),
                         start=1,
                     ):
-                        print_candidate(i, ctx)
+                        printer(i, ctx)
                         seen.mark_seen(ctx.board.fen())
                 print(f"\nCache: {cache.hits} hits, {cache.misses} misses")
 

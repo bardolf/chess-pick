@@ -154,6 +154,71 @@ class PositionRule(Protocol):
 
 
 @dataclass
+class OpeningPositionMatches:
+    """GameRule: během prvních max_ply půltahů musí pozice projít zadaným FEN.
+
+    Porovnává jen piece placement + side to move (ignoruje halfmove/fullmove
+    a počty tahů), takže různé transpozice ke stejné pozici matchnou.
+
+    Příklad — Nimzo po 3...Bb4 (jakákoliv transpozice):
+        OpeningPositionMatches("rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 1")
+    """
+    fen: str
+    max_ply: int = 30
+
+    def __post_init__(self):
+        parts = self.fen.split()
+        self._target_placement = parts[0]
+        self._target_turn = parts[1] if len(parts) > 1 else "w"
+
+    def match(self, game: chess.pgn.Game) -> bool:
+        board = game.board()
+        if self._matches(board):
+            return True
+        ply = 0
+        for move in game.mainline_moves():
+            board.push(move)
+            ply += 1
+            if self._matches(board):
+                return True
+            if ply >= self.max_ply:
+                return False
+        return False
+
+    def _matches(self, board: chess.Board) -> bool:
+        parts = board.fen().split()
+        return parts[0] == self._target_placement and parts[1] == self._target_turn
+
+
+@dataclass
+class PawnStructureMatches:
+    """PositionRule: na šachovnici jsou všechny pěšce ze zadaného FEN.
+
+    Z FEN se extrahují pozice bílých i černých pěšců a vyžadují se na daných
+    čtvercích. Další pěšce a figury kdekoliv. Subset match.
+
+    Příklad — Nimzo c3/c4/d4 centrum:
+        PawnStructureMatches("8/8/8/8/2PP4/2P5/8/8 w - - 0 1")
+    """
+    fen: str
+
+    def __post_init__(self):
+        board = chess.Board(self.fen)
+        self._required: list[tuple[int, chess.Color]] = []
+        for sq in chess.SQUARES:
+            piece = board.piece_at(sq)
+            if piece is not None and piece.piece_type == chess.PAWN:
+                self._required.append((sq, piece.color))
+
+    def match(self, ctx: "PositionContext") -> bool:
+        for sq, color in self._required:
+            p = ctx.board.piece_at(sq)
+            if p is None or p.piece_type != chess.PAWN or p.color != color:
+                return False
+        return True
+
+
+@dataclass
 class NotYetProcessedGame:
     """GameRule: přeskočí partii, jejíž ID je v `processed_ids`."""
     processed_ids: set
@@ -184,6 +249,15 @@ class FromMoveNumber:
 
     def match(self, ctx: PositionContext) -> bool:
         return ctx.fullmove_number >= self.threshold
+
+
+@dataclass
+class UntilMoveNumber:
+    """PositionRule: fires jen pokud je `fullmove_number <= threshold`."""
+    threshold: int = 10
+
+    def match(self, ctx: PositionContext) -> bool:
+        return ctx.fullmove_number <= self.threshold
 
 
 @dataclass
@@ -316,6 +390,7 @@ def find_positions(
     multipv: int = 3,
     limit: Optional[int] = None,
     max_per_game: Optional[int] = None,
+    verbose: bool = True,
 ) -> Iterator[PositionContext]:
     yielded = 0
     games_analyzed = 0
@@ -326,10 +401,11 @@ def find_positions(
         h = game.headers
         hits_before = getattr(analyser, "hits", 0)
         misses_before = getattr(analyser, "misses", 0)
-        print(
-            f"[{games_analyzed:4d}] {h.get('White','?')} vs {h.get('Black','?')}",
-            flush=True,
-        )
+        if verbose:
+            print(
+                f"[{games_analyzed:4d}] {h.get('White','?')} vs {h.get('Black','?')}",
+                flush=True,
+            )
         board = game.board()
         from_this_game = 0
         prev_move: Optional[chess.Move] = None
@@ -358,7 +434,8 @@ def find_positions(
             board.push(move)
         hits = getattr(analyser, "hits", 0) - hits_before
         misses = getattr(analyser, "misses", 0) - misses_before
-        print(
-            f"        cache: {hits}h / {misses}m, {from_this_game} kandid.",
-            flush=True,
-        )
+        if verbose:
+            print(
+                f"        cache: {hits}h / {misses}m, {from_this_game} kandid.",
+                flush=True,
+            )
