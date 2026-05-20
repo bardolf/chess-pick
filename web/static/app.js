@@ -222,15 +222,215 @@ let currentAbortController = null;
 let currentMatches = [];
 
 function updateExportPdfButton() {
-  // PDF export ještě není implementován; tlačítko necháváme, ale jen zobrazí alert.
   const btn = document.getElementById('btn-export-pdf');
   if (!btn) return;
-  btn.disabled = false;
-  btn.title = 'PDF export (to be implemented)';
+  const allowed = (state.selectedRule === 'blunder' || state.selectedRule === 'zwischenzug');
+  btn.disabled = !(allowed && currentMatches.length > 0);
+  btn.title = allowed
+    ? (currentMatches.length > 0
+        ? `Stáhnout ${currentMatches.length} pozic jako PDF (client-side)`
+        : 'Po spuštění analýzy ti tu nabídnu PDF s diagramy')
+    : 'PDF export je dostupný jen pro rule 1 a rule 2';
 }
 
-function exportPdf() {
-  alert('PDF export — to be implemented');
+// ---- Client-side PDF generation pomocí jsPDF ----
+
+const PIECE_CODES = ['wP','wN','wB','wR','wQ','wK','bP','bN','bB','bR','bQ','bK'];
+let PIECE_IMAGES = null;  // {wP: dataURL, ...} po preloadu
+
+async function preloadPieces() {
+  if (PIECE_IMAGES) return PIECE_IMAGES;
+  const map = {};
+  await Promise.all(PIECE_CODES.map(async code => {
+    const r = await fetch(`/static/pieces/${code}.png`);
+    if (!r.ok) throw new Error('failed to load ' + code);
+    const blob = await r.blob();
+    map[code] = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }));
+  PIECE_IMAGES = map;
+  return map;
+}
+
+function asciiText(s) {
+  if (!s) return '';
+  // NFKD + odstraň combining diacritical marks (U+0300 až U+036F)
+  return String(s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function fenToBoard(fen) {
+  // 2D pole [rank 0..7][file 0..7], rank 0 = řada 1, rank 7 = řada 8
+  const placement = fen.split(' ')[0];
+  const board = Array.from({ length: 8 }, () => Array(8).fill(null));
+  const rows = placement.split('/');  // index 0 = rank 8
+  for (let i = 0; i < 8; i++) {
+    let f = 0;
+    for (const ch of rows[i]) {
+      if (/\d/.test(ch)) {
+        f += parseInt(ch, 10);
+      } else {
+        const color = ch === ch.toUpperCase() ? 'w' : 'b';
+        const piece = ch.toUpperCase();
+        board[7 - i][f] = color + piece;
+        f++;
+      }
+    }
+  }
+  return board;
+}
+
+function drawBoardOnPdf(pdf, fen, x, y, size) {
+  const board = fenToBoard(fen);
+  const cell = size / 8;
+  for (let rank = 0; rank < 8; rank++) {
+    for (let file = 0; file < 8; file++) {
+      const isLight = (rank + file) % 2 === 1;
+      pdf.setFillColor(isLight ? 237 : 181, isLight ? 214 : 136, isLight ? 178 : 99);
+      const sx = x + file * cell;
+      const sy = y + (7 - rank) * cell;
+      pdf.rect(sx, sy, cell, cell, 'F');
+      const piece = board[rank][file];
+      if (piece && PIECE_IMAGES[piece]) {
+        pdf.addImage(PIECE_IMAGES[piece], 'PNG', sx, sy, cell, cell);
+      }
+    }
+  }
+  // border
+  pdf.setDrawColor(0);
+  pdf.setLineWidth(0.3);
+  pdf.rect(x, y, size, size);
+  // coordinates a-h (under board), 1-8 (left)
+  pdf.setFontSize(6);
+  pdf.setTextColor(80);
+  for (let i = 0; i < 8; i++) {
+    pdf.text('abcdefgh'[i], x + i * cell + cell * 0.4, y + size + 2.5);
+    pdf.text(String(8 - i), x - 2.5, y + i * cell + cell * 0.65);
+  }
+  pdf.setTextColor(0);
+}
+
+async function exportPdf() {
+  if (currentMatches.length === 0) return;
+  if (state.selectedRule !== 'blunder' && state.selectedRule !== 'zwischenzug') return;
+  const btn = document.getElementById('btn-export-pdf');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ PDF';
+  try {
+    await preloadPieces();
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    const PAGE_W = 210, PAGE_H = 297;
+    const MARGIN_X = 12, MARGIN_TOP = 18, MARGIN_BOTTOM = 12;
+    const COLS = 2, ROWS = 2, PER_PAGE = COLS * ROWS;
+    const CELL_W = (PAGE_W - 2 * MARGIN_X) / COLS;
+    const CELL_H = (PAGE_H - MARGIN_TOP - MARGIN_BOTTOM) / ROWS;
+    const BOARD_SIZE = Math.min(CELL_W, CELL_H) * 0.85;
+
+    for (let i = 0; i < currentMatches.length; i++) {
+      const m = currentMatches[i];
+      const slot = i % PER_PAGE;
+      if (slot === 0 && i > 0) pdf.addPage();
+      if (slot === 0) {
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`chess-pick - ${state.selectedRule} puzzles`, MARGIN_X, MARGIN_TOP / 2 + 2);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(100);
+        pdf.text(`page ${Math.floor(i / PER_PAGE) + 1}`, PAGE_W - MARGIN_X, MARGIN_TOP / 2 + 2, { align: 'right' });
+        pdf.setTextColor(0);
+      }
+      const col = slot % COLS;
+      const row = Math.floor(slot / COLS);
+      const cellX = MARGIN_X + col * CELL_W;
+      const cellYTop = MARGIN_TOP + row * CELL_H;
+      const boardX = cellX + (CELL_W - BOARD_SIZE) / 2;
+      const boardY = cellYTop + 10;
+
+      // index
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`#${i + 1}`, boardX, boardY - 3);
+
+      // game info (jednoduchá truncace podle délky znaků)
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'normal');
+      const players = `${asciiText(m.white || '?')} - ${asciiText(m.black || '?')}`;
+      let extras = '';
+      if (m.event && m.event !== '?') extras += ' | ' + asciiText(m.event);
+      if (m.date && m.date !== '?') {
+        const year = m.date.split('.')[0];
+        if (year && !extras.includes(year)) extras += ' ' + year;
+      }
+      let infoLine = players + extras;
+      // BOARD_SIZE ~95 mm, font 9pt → ~60 znaků se vejde
+      const MAX_INFO_CHARS = 60;
+      if (infoLine.length > MAX_INFO_CHARS) {
+        infoLine = infoLine.slice(0, MAX_INFO_CHARS - 2) + '..';
+      }
+      pdf.text(infoLine, boardX + 10, boardY - 3);
+
+      // board
+      drawBoardOnPdf(pdf, m.fen, boardX, boardY, BOARD_SIZE);
+
+      // side label under board
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      const sideLbl = m.side === 'white' ? 'White to move' : 'Black to move';
+      pdf.text(sideLbl, boardX + BOARD_SIZE / 2, boardY + BOARD_SIZE + 7, { align: 'center' });
+    }
+
+    // ---- Solutions page ----
+    pdf.addPage();
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Solutions', MARGIN_X, MARGIN_TOP);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    let sy = MARGIN_TOP + 10;
+    const lineH = 5.5;
+    for (let i = 0; i < currentMatches.length; i++) {
+      const m = currentMatches[i];
+      if (sy > PAGE_H - MARGIN_BOTTOM - 10) {
+        pdf.addPage();
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Solutions (continued)', MARGIN_X, MARGIN_TOP);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        sy = MARGIN_TOP + 10;
+      }
+      const side = m.side === 'white' ? 'White' : 'Black';
+      const best = m.best || '?';
+      const played = m.played || '?';
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`#${i + 1}`, MARGIN_X, sy);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`${side}: best = ${best}    (played: ${played})`, MARGIN_X + 10, sy);
+      const players = `${asciiText(m.white)} - ${asciiText(m.black)}`;
+      const event = m.event && m.event !== '?' ? ` | ${asciiText(m.event)}` : '';
+      const year = m.date && m.date !== '?' ? ` ${m.date.split('.')[0]}` : '';
+      pdf.setFontSize(8);
+      pdf.setTextColor(100);
+      pdf.text(players + event + year, MARGIN_X + 10, sy + 3.2);
+      pdf.setTextColor(0);
+      pdf.setFontSize(10);
+      sy += lineH + 2;
+    }
+
+    pdf.save(`chess-pick-${state.selectedRule}-puzzles.pdf`);
+  } catch (e) {
+    console.error('[PDF] error:', e);
+    alert('PDF export selhal: ' + (e.message || e));
+  } finally {
+    btn.textContent = orig;
+    updateExportPdfButton();
+  }
 }
 
 async function runAnalyze() {
@@ -251,6 +451,7 @@ async function runAnalyze() {
 
   currentAbortController = new AbortController();
   currentMatches = [];
+  updateExportPdfButton();
   let matchCount = 0;
   const startTime = Date.now();
 
@@ -316,6 +517,7 @@ function handleStreamMessage(msg, matchCount) {
   } else if (msg.type === 'match') {
     matchCount++;
     currentMatches.push(msg.data);
+    updateExportPdfButton();
     const item = renderMatchItem(matchCount, msg.data);
     out.appendChild(item);
     if (h) h.textContent = `Pravidlo: běží · ${matchCount} nálezů`;
@@ -600,6 +802,7 @@ function setupEvents() {
   document.getElementById('rule-select').addEventListener('change', (e) => {
     state.selectedRule = e.target.value;
     renderRuleUI();
+    updateExportPdfButton();
   });
 
   document.getElementById('btn-analyze').addEventListener('click', runAnalyze);
@@ -700,5 +903,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEvents();
   document.getElementById('rule-select').value = state.selectedRule;
   renderRuleUI();
+  updateExportPdfButton();
   fetchPgns();
 });
