@@ -25,6 +25,8 @@ import chess.engine
 import chess.pgn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 import json
+import urllib.parse
+import urllib.request
 
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -99,15 +101,15 @@ async def upload_pgn(file: UploadFile = File(...)) -> dict:
 
 @app.get("/api/pgns/{name}/games")
 def list_games(name: str) -> list[dict]:
+    """Rychlý seznam — používá `read_headers` (nečte tahy)."""
     path = _pgn_path(name)
     out = []
     with path.open(encoding="utf-8", errors="replace") as f:
         idx = 0
         while True:
-            game = chess.pgn.read_game(f)
-            if game is None:
+            h = chess.pgn.read_headers(f)
+            if h is None:
                 break
-            h = game.headers
             out.append({
                 "idx": idx,
                 "white": h.get("White", "?"),
@@ -167,6 +169,40 @@ class AnalyzeRequest(BaseModel):
     pgn: str
     params: dict = {}
     limit: int | None = None  # max kandidátů (None = default per mód)
+
+
+class LichessImportRequest(BaseModel):
+    pgn: str
+
+
+@app.post("/api/lichess-import")
+def lichess_import(req: LichessImportRequest) -> dict:
+    """Server-side proxy na Lichess /api/import — obejde browser CORS."""
+    if not req.pgn.strip():
+        raise HTTPException(400, "Prázdný PGN")
+    data = urllib.parse.urlencode({"pgn": req.pgn}).encode()
+    http_req = urllib.request.Request(
+        "https://lichess.org/api/import",
+        data=data,
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+            "User-Agent": "chess-pick/0.1",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(http_req, timeout=15) as resp:
+            body = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        raise HTTPException(502, f"Lichess vrátil {e.code}: {e.read().decode('utf-8', errors='replace')[:200]}")
+    except Exception as e:
+        raise HTTPException(502, f"Spojení s Lichess selhalo: {e}")
+    try:
+        game = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(502, f"Neplatná odpověď z Lichess: {body[:200]}")
+    return {"url": game.get("url"), "id": game.get("id")}
 
 
 @app.post("/api/analyze")

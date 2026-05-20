@@ -62,8 +62,9 @@ const RULE_DEFS = {
       'Hledá partie, ve kterých vznikla zadaná pěšcová struktura. ' +
       'Spouští se přes všechny partie ve vybraném PGN.',
     params: [
-      { key: 'fen', label: 'pawn FEN', type: 'text', default: '8/8/8/8/3P4/4P3/PP3PPP/8 w - - 0 1',
-        hint: 'FEN pozice s požadovanými pěšci. Ostatní figury ve FEN se ignorují. Subset match — další pěšce/figury na šachovnici jsou OK.' },
+      { key: 'fen', label: 'FEN', type: 'text', default: '8/8/8/8/3P4/4P3/PP3PPP/8 w - - 0 1',
+        hint: 'FEN se zadanou pěšcovou strukturou. Můžeš dát i figury (jezdce, střelce…) — pravidlo z FEN bere v úvahu pouze pěšce, vše ostatní je dekorativní. Subset match: na šachovnici musí být všechny zadané pěšce, jiné figury/pěšce nikde jinde jsou OK.',
+        extra: 'fen-buttons' },
       { key: 'opening_moves', label: 'zahájení (volitelné)', type: 'text',
         default: '', placeholder: '1.d4 Nf6 2.c4 e6 3.Nc3 Bb4 4.a3 Bxc3+ 5.bxc3',
         hint: 'Volitelně PGN tahy — partie musí projít touhle pozicí (různé transpozice ano). Prázdné = libovolné zahájení.' },
@@ -100,9 +101,66 @@ function applyCurrentPosition() {
 }
 
 function updateFENDisplay(fen) {
-  document.getElementById('fen').value = fen === 'start'
+  const finalFen = fen === 'start'
     ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
     : fen;
+  document.getElementById('fen').value = finalFen;
+  // fallback href (FEN analysis) — kliknutím se ale spustí openInLichess() který
+  // pošle PGN, pokud je partie otevřená
+  document.getElementById('open-in-lichess').href =
+    `https://lichess.org/analysis/${encodeURIComponent(finalFen)}`;
+}
+
+function buildPgnFromDetail(detail) {
+  const lines = [];
+  const push = (k, v) => { if (v && v !== '?') lines.push(`[${k} "${v}"]`); };
+  push('Event', detail.event);
+  push('Date', detail.date);
+  push('White', detail.white);
+  push('Black', detail.black);
+  push('WhiteElo', detail.white_elo);
+  push('BlackElo', detail.black_elo);
+  push('Result', detail.result);
+  lines.push('');
+  const parts = [];
+  for (let i = 0; i < detail.moves_san.length; i++) {
+    if (i % 2 === 0) parts.push(`${Math.floor(i / 2) + 1}.`);
+    parts.push(detail.moves_san[i]);
+  }
+  if (detail.result && detail.result !== '*') parts.push(detail.result);
+  lines.push(parts.join(' '));
+  return lines.join('\n');
+}
+
+async function openInLichess(e) {
+  // Bez načtené partie nech proběhnout výchozí FEN-only link
+  if (!state.gameDetail) return;
+  e.preventDefault();
+  const link = document.getElementById('open-in-lichess');
+  const originalText = link.textContent;
+  link.textContent = '⏳ Lichess';
+  try {
+    const pgn = buildPgnFromDetail(state.gameDetail);
+    const ply = state.currentMoveIdx;
+    const r = await fetch('/api/lichess-import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pgn }),
+    });
+    if (!r.ok) {
+      alert('Lichess import selhal: ' + (await r.text()));
+      return;
+    }
+    const data = await r.json();
+    if (!data.url) {
+      alert('Lichess nevrátil URL');
+      return;
+    }
+    const url = data.url + (ply > 0 ? '#' + ply : '');
+    window.open(url, '_blank', 'noopener');
+  } finally {
+    link.textContent = originalText;
+  }
 }
 
 function updateMoveCounter() {
@@ -262,7 +320,7 @@ function renderMatchItem(idx, m) {
   item.className = 'result-item';
   item.dataset.gameIdx = m.game_idx ?? -1;
   item.dataset.ply = m.ply ?? 0;
-  item.title = 'Dvojklik načte partii a skočí na pozici';
+  item.title = 'Klikni pro načtení partie a skok na tuto pozici';
   const elo = (e) => (e && e !== '?' ? ` (${e})` : '');
   const side = m.side === 'white' ? 'bílý' : 'černý';
   let tag = `${m.fullmove}. (${side})`;
@@ -273,7 +331,7 @@ function renderMatchItem(idx, m) {
     <div class="result-line2">${tag}${extra}</div>
     <div class="result-fen">${escape(m.fen)}</div>
   `;
-  item.addEventListener('dblclick', () => {
+  item.addEventListener('click', () => {
     const gi = Number(item.dataset.gameIdx);
     const ply = Number(item.dataset.ply);
     if (gi >= 0) {
@@ -296,7 +354,8 @@ function renderPgnList() {
     const li = document.createElement('li');
     li.textContent = `${p.name} (${p.size_kb} KB)`;
     if (p.name === state.selectedPgn) li.classList.add('selected');
-    li.addEventListener('dblclick', () => {
+    li.title = 'Klikni pro načtení partií';
+    li.addEventListener('click', () => {
       state.selectedPgn = p.name;
       document.getElementById('selected-pgn').textContent = p.name;
       renderPgnList();
@@ -314,9 +373,9 @@ function renderGameList() {
     const wElo = g.white_elo !== '?' ? ` (${g.white_elo})` : '';
     const bElo = g.black_elo !== '?' ? ` (${g.black_elo})` : '';
     li.textContent = `${g.white}${wElo} — ${g.black}${bElo}    [${g.result}]`;
-    li.title = `${g.event}, ${g.date}`;
+    li.title = `${g.event}, ${g.date} — klikni pro načtení na šachovnici`;
     if (g.idx === state.selectedGameIdx) li.classList.add('selected');
-    li.addEventListener('dblclick', () => {
+    li.addEventListener('click', () => {
       state.selectedGameIdx = g.idx;
       renderGameList();
       fetchGameDetail(state.selectedPgn, g.idx);
@@ -420,6 +479,22 @@ function renderRuleUI() {
       wrap.appendChild(hint);
     }
 
+    if (p.extra === 'fen-buttons') {
+      const btnRow = document.createElement('div');
+      btnRow.className = 'fen-buttons';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = '🔗 board editor';
+      editBtn.title = 'Otevře Lichess board editor s aktuálním FEN';
+      editBtn.addEventListener('click', () => {
+        const cur = input.value;
+        const url = cur ? `https://lichess.org/editor/${encodeURIComponent(cur)}` : 'https://lichess.org/editor';
+        window.open(url, '_blank', 'noopener');
+      });
+      btnRow.appendChild(editBtn);
+      wrap.appendChild(btnRow);
+    }
+
     container.appendChild(wrap);
   }
 }
@@ -501,6 +576,7 @@ function setupEvents() {
   document.getElementById('btn-stop').addEventListener('click', stopAnalyze);
   document.getElementById('btn-copy-output').addEventListener('click', copyOutput);
   document.getElementById('btn-download-output').addEventListener('click', downloadOutput);
+  document.getElementById('open-in-lichess').addEventListener('click', openInLichess);
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -580,6 +656,15 @@ function setupResizers() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Theme — načti uloženou volbu z localStorage
+  if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light');
+  }
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    document.body.classList.toggle('light');
+    localStorage.setItem('theme', document.body.classList.contains('light') ? 'light' : 'dark');
+  });
+
   initBoard();
   setupEvents();
   document.getElementById('rule-select').value = state.selectedRule;

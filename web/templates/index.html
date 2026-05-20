@@ -4,12 +4,14 @@
   <meta charset="UTF-8" />
   <title>chess-pick</title>
   <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=7" />
 </head>
 <body>
   <header>
-    <h1>chess-pick</h1>
-    <span class="subtitle">filtrování zajímavých pozic pro trénink</span>
+    <h1>Chess-Pick</h1>
+    <blockquote class="subtitle">„pro filtrování zajímavých pozic"</blockquote>
+    <div class="author">IM Jáchym Němec</div>
+    <button id="theme-toggle" class="theme-toggle" title="Přepnout dark / light mode">🌓</button>
   </header>
 
   <main class="three-col" id="main-grid">
@@ -30,6 +32,8 @@
       <div class="fen-display">
         <label>FEN:</label>
         <input type="text" id="fen" readonly />
+        <a id="open-in-lichess" target="_blank" rel="noopener"
+           title="Otevřít aktuální pozici v Lichess analýze (engine + database)">↗ Lichess</a>
       </div>
       <div class="output">
         <div class="output-header">
@@ -97,6 +101,6 @@
 
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=7"></script>
 </body>
 </html>
