@@ -35,7 +35,7 @@ STOCKFISH_THREADS = 8
 STOCKFISH_HASH_MB = 4096
 
 # Předvolby hledání — toggle změnou SEARCH_MODE.
-SEARCH_MODE = "pawn_structure"  # "blunder" | "zwischenzug" | "zwischenzug_available" | "pawn_structure"
+SEARCH_MODE = "zwischenzug_available"  # "blunder" | "zwischenzug" | "zwischenzug_available" | "pawn_structure"
 
 # TEST_MODE: vypne Elo gate + balanced-eval gate, ať projdou ručně připravené partie
 # bez Elo a v libovolné fázi. Pro běh nad TWIC nech False.

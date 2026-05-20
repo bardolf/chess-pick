@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <title>chess-pick</title>
+  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>chess-pick</h1>
+    <span class="subtitle">filtrování zajímavých pozic pro trénink</span>
+  </header>
+
+  <main class="three-col" id="main-grid">
+
+    <!-- LEFT: chessboard + nav + FEN + output -->
+    <section class="col left">
+      <div id="board" class="board"></div>
+      <div class="board-nav">
+        <button id="nav-start" title="Začátek partie">⏮</button>
+        <button id="nav-back" title="Tah zpět">◀</button>
+        <button id="nav-forward" title="Tah vpřed">▶</button>
+        <button id="nav-end" title="Konec partie">⏭</button>
+      </div>
+      <div class="move-info">
+        <div><strong>Tah:</strong> <span id="move-counter">0 / 0</span></div>
+        <div><strong>Posl. tah:</strong> <span id="last-move">—</span></div>
+      </div>
+      <div class="fen-display">
+        <label>FEN:</label>
+        <input type="text" id="fen" readonly />
+      </div>
+      <div class="output">
+        <div class="output-header">
+          <strong>Výsledek analýzy</strong>
+          <button id="btn-copy-output" title="Zkopírovat výstup">📋</button>
+          <button id="btn-download-output" title="Stáhnout výstup">⬇</button>
+        </div>
+        <div id="output-area">Žádná analýza zatím nespuštěna.</div>
+      </div>
+    </section>
+
+    <div class="resizer" data-resizer="left"></div>
+
+    <!-- MIDDLE: PGN browser -->
+    <section class="col middle">
+      <div class="pgn-upload">
+        <label class="upload-label">
+          Upload PGN
+          <input type="file" id="upload-input" accept=".pgn" />
+        </label>
+      </div>
+      <div class="panel">
+        <div class="panel-title">PGN soubory</div>
+        <ul id="pgn-list" class="scroll-list"></ul>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Partie v <span id="selected-pgn">(nic vybráno)</span></div>
+        <ul id="games-list" class="scroll-list"></ul>
+      </div>
+      <div class="panel game-detail">
+        <div class="panel-title">Detail partie</div>
+        <div id="game-detail-area">
+          <em>Vyber partii dvojklikem nahoře.</em>
+        </div>
+      </div>
+    </section>
+
+    <div class="resizer" data-resizer="middle"></div>
+
+    <!-- RIGHT: rule + params + analyze -->
+    <section class="col right">
+      <div class="panel">
+        <div class="panel-title">Pravidlo</div>
+        <select id="rule-select">
+          <option value="blunder">Rule 1 — Blunder</option>
+          <option value="zwischenzug" selected>Rule 2 — Zwischenzug</option>
+          <option value="pawn_structure">Rule 3 — Pawn structure</option>
+        </select>
+        <p id="rule-description" class="rule-description"></p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Parametry</div>
+        <div id="rule-params"></div>
+      </div>
+
+      <div class="analyze-section">
+        <button id="btn-analyze">▶ Analyze</button>
+        <button id="btn-stop" disabled>■ Stop</button>
+        <span id="analyze-status"></span>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
