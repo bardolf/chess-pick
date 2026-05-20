@@ -192,28 +192,32 @@ class OpeningPositionMatches:
 
 @dataclass
 class PawnStructureMatches:
-    """PositionRule: na šachovnici jsou všechny pěšce ze zadaného FEN.
+    """PositionRule: na šachovnici jsou všechny figurky ze zadaného FEN
+    na zadaných čtvercích, přesně té samé barvy a typu.
 
-    Z FEN se extrahují pozice bílých i černých pěšců a vyžadují se na daných
-    čtvercích. Další pěšce a figury kdekoliv. Subset match.
+    Subset match — další figurky/pěšce kdekoliv jinde jsou OK. FEN se bere
+    doslova, takže si můžeš zadat libovolnou kombinaci pěšců i figur.
 
-    Příklad — Nimzo c3/c4/d4 centrum:
-        PawnStructureMatches("8/8/8/8/2PP4/2P5/8/8 w - - 0 1")
+    Příklady:
+      - Nimzo c3/c4/d4 centrum (jen pěšce):
+            "8/8/8/8/2PP4/2P5/8/8 w - - 0 1"
+      - Double fianchetto (pěšce b3/g3 + střelci b2/g2):
+            "8/8/8/8/8/1P4P1/PB4BP/8 w - - 0 1"
     """
     fen: str
 
     def __post_init__(self):
         board = chess.Board(self.fen)
-        self._required: list[tuple[int, chess.Color]] = []
+        self._required: list[tuple[int, chess.Color, chess.PieceType]] = []
         for sq in chess.SQUARES:
             piece = board.piece_at(sq)
-            if piece is not None and piece.piece_type == chess.PAWN:
-                self._required.append((sq, piece.color))
+            if piece is not None:
+                self._required.append((sq, piece.color, piece.piece_type))
 
     def match(self, ctx: "PositionContext") -> bool:
-        for sq, color in self._required:
+        for sq, color, ptype in self._required:
             p = ctx.board.piece_at(sq)
-            if p is None or p.piece_type != chess.PAWN or p.color != color:
+            if p is None or p.piece_type != ptype or p.color != color:
                 return False
         return True
 

@@ -14,7 +14,7 @@ const state = {
   selectedGameIdx: null,
   gameDetail: null,
   currentMoveIdx: 0,
-  selectedRule: 'zwischenzug',
+  selectedRule: 'blunder',
 };
 
 // -------- Rule definitions (parameter schemas + descriptions) --------
@@ -57,13 +57,13 @@ const RULE_DEFS = {
     ],
   },
   pawn_structure: {
-    label: 'Rule 3 — Pawn structure',
+    label: 'Rule 3 — Struktura / rozestavění',
     description:
-      'Hledá partie, ve kterých vznikla zadaná pěšcová struktura. ' +
+      'Hledá partie, ve kterých vznikla zadaná struktura figurek a pěšců. ' +
       'Spouští se přes všechny partie ve vybraném PGN.',
     params: [
       { key: 'fen', label: 'FEN', type: 'text', default: '8/8/8/8/3P4/4P3/PP3PPP/8 w - - 0 1',
-        hint: 'FEN se zadanou pěšcovou strukturou. Můžeš dát i figury (jezdce, střelce…) — pravidlo z FEN bere v úvahu pouze pěšce, vše ostatní je dekorativní. Subset match: na šachovnici musí být všechny zadané pěšce, jiné figury/pěšce nikde jinde jsou OK.',
+        hint: 'Pravidlo se dívá doslova na FEN — všechny zadané figurky musí být na svých čtvercích, té barvy a typu. Subset match: ostatní pole jsou libovolná.',
         extra: 'fen-buttons' },
       { key: 'opening_moves', label: 'zahájení (volitelné)', type: 'text',
         default: '', placeholder: '1.d4 Nf6 2.c4 e6 3.Nc3 Bb4 4.a3 Bxc3+ 5.bxc3',
@@ -219,6 +219,19 @@ async function uploadPgn(file) {
 }
 
 let currentAbortController = null;
+let currentMatches = [];
+
+function updateExportPdfButton() {
+  // PDF export ještě není implementován; tlačítko necháváme, ale jen zobrazí alert.
+  const btn = document.getElementById('btn-export-pdf');
+  if (!btn) return;
+  btn.disabled = false;
+  btn.title = 'PDF export (to be implemented)';
+}
+
+function exportPdf() {
+  alert('PDF export — to be implemented');
+}
 
 async function runAnalyze() {
   if (!state.selectedPgn) {
@@ -237,6 +250,7 @@ async function runAnalyze() {
   out.innerHTML = '<div class="result-header" id="result-header">analýza spuštěna...</div>';
 
   currentAbortController = new AbortController();
+  currentMatches = [];
   let matchCount = 0;
   const startTime = Date.now();
 
@@ -301,6 +315,7 @@ function handleStreamMessage(msg, matchCount) {
     if (h) h.textContent = `Pravidlo: progress · ${msg.games_scanned} partií, ${msg.matches_found} nálezů`;
   } else if (msg.type === 'match') {
     matchCount++;
+    currentMatches.push(msg.data);
     const item = renderMatchItem(matchCount, msg.data);
     out.appendChild(item);
     if (h) h.textContent = `Pravidlo: běží · ${matchCount} nálezů`;
@@ -443,6 +458,10 @@ function escape(s) {
 
 // -------- Rule UI --------
 
+function paramStorageKey(ruleName, paramKey) {
+  return `chess-pick:param:${ruleName}:${paramKey}`;
+}
+
 function renderRuleUI() {
   const def = RULE_DEFS[state.selectedRule];
   document.getElementById('rule-description').textContent = def.description;
@@ -456,19 +475,30 @@ function renderRuleUI() {
     const span = document.createElement('span');
     span.textContent = p.label;
     lbl.appendChild(span);
+
+    const storedRaw = localStorage.getItem(paramStorageKey(state.selectedRule, p.key));
+
     let input;
     if (p.type === 'checkbox') {
       input = document.createElement('input');
       input.type = 'checkbox';
-      input.checked = !!p.default;
+      input.checked = storedRaw !== null ? storedRaw === 'true' : !!p.default;
     } else {
       input = document.createElement('input');
       input.type = p.type;
-      input.value = p.default;
+      input.value = storedRaw !== null ? storedRaw : p.default;
       if (p.placeholder) input.placeholder = p.placeholder;
     }
     input.dataset.key = p.key;
     input.dataset.type = p.type;
+
+    const saveValue = () => {
+      const v = p.type === 'checkbox' ? input.checked : input.value;
+      localStorage.setItem(paramStorageKey(state.selectedRule, p.key), String(v));
+    };
+    input.addEventListener('change', saveValue);
+    input.addEventListener('input', saveValue);
+
     lbl.appendChild(input);
     wrap.appendChild(lbl);
 
@@ -577,6 +607,7 @@ function setupEvents() {
   document.getElementById('btn-copy-output').addEventListener('click', copyOutput);
   document.getElementById('btn-download-output').addEventListener('click', downloadOutput);
   document.getElementById('open-in-lichess').addEventListener('click', openInLichess);
+  document.getElementById('btn-export-pdf').addEventListener('click', exportPdf);
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {

@@ -28,7 +28,7 @@ import json
 import urllib.parse
 import urllib.request
 
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -74,7 +74,10 @@ CLASSIFIER: OpeningClassifier | None = (
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
-    return HTMLResponse(INDEX_HTML)
+    # cache busting přes Cache-Control — vždy načti čerstvé HTML
+    return HTMLResponse(INDEX_HTML, headers={"Cache-Control": "no-store"})
+
+
 
 
 # ---------------------------------------------------------------------------
