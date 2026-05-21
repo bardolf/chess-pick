@@ -220,15 +220,11 @@ def analyze(req: AnalyzeRequest) -> StreamingResponse:
         limit = req.limit or 50
         gen = _stream_engine(pgn_path, req.rule, req.params, limit)
     elif req.rule == "mate":
-        gen = _stream_not_implemented(req.rule)
+        limit = req.limit or 100
+        gen = _stream_mate(pgn_path, req.params, limit)
     else:
         raise HTTPException(400, f"Neznámé pravidlo: {req.rule}")
     return StreamingResponse(gen, media_type="application/x-ndjson")
-
-
-def _stream_not_implemented(rule_name: str):
-    yield _emit({"type": "start", "rule": rule_name})
-    yield _emit({"type": "error", "message": f"Rule '{rule_name}' ještě není implementováno (UI je hotové, backend přijde dál)."})
 
 
 def _emit(obj: dict) -> str:
@@ -386,6 +382,120 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int):
         # klient se odpojil (Stop) — context managers (engine, cache) se uklidí samy
         return
     yield _emit({"type": "done", "matches_total": matches_found})
+
+
+# --- Rule 4: Mate ---------------------------------------------------------
+
+def _attr_match(filter_value, actual_bool: bool) -> bool:
+    """Ano/ne/nezáleží filtr vs reálná bool hodnota."""
+    if not filter_value or filter_value == "nezáleží":
+        return True
+    if filter_value == "ano":
+        return bool(actual_bool)
+    if filter_value == "ne":
+        return not bool(actual_bool)
+    return True
+
+
+def _stream_mate(pgn_path: Path, params: dict, limit: int):
+    try:
+        mate_in = int(params.get("mate_in") or 1)
+    except (TypeError, ValueError):
+        mate_in = 1
+    mate_in = max(1, min(5, mate_in))
+    moves_filter = params.get("moves") or []  # list of {move_from_mate, check, capture, promotion}
+    elo_rule = _build_elo_rule(params)
+
+    yield _emit({"type": "start", "rule": "mate", "limit": limit, "mate_in": mate_in})
+
+    games_scanned = 0
+    matches_found = 0
+    for game_idx, game in _iter_pgn_games(pgn_path):
+        games_scanned += 1
+        if games_scanned % 100 == 0:
+            yield _emit({"type": "progress", "games_scanned": games_scanned, "matches_found": matches_found})
+        if elo_rule is not None and not elo_rule.match(game):
+            continue
+
+        # spočítej atributy pro každý tah + FEN před každým tahem
+        board = game.board()
+        fens_before = [board.fen()]
+        attrs = []
+        san_list = []
+        for move in game.mainline_moves():
+            cap = board.is_capture(move)
+            prom = move.promotion is not None
+            try:
+                san = board.san(move)
+            except Exception:
+                san = move.uci()
+            san_list.append(san)
+            board.push(move)
+            attrs.append({
+                "check": board.is_check(),
+                "capture": cap,
+                "promotion": prom,
+                "checkmate": board.is_checkmate(),
+            })
+            fens_before.append(board.fen())
+
+        # najdi pozice s matem
+        for i, a in enumerate(attrs):
+            if not a["checkmate"]:
+                continue
+            # mate_in = počet tahů matující strany (M_1..M_N, mezi nimi obrana D_1..D_{N-1}).
+            # Sekvence má 2*N - 1 půltahů, target_ply je půltah před M_1.
+            # M_K (vzdálenost K od matu) = attrs[i - 2*K], K=0..N-1.
+            target_ply = i + 2 - 2 * mate_in
+            if target_ply < 0:
+                continue
+
+            # aplikuj filtr na předchozí tahy matující strany (mat-1 .. mat-(N-1))
+            ok = True
+            for fm in moves_filter:
+                try:
+                    move_from_mate = int(fm.get("move_from_mate"))
+                except (TypeError, ValueError):
+                    continue
+                if move_from_mate < 1 or move_from_mate >= mate_in:
+                    continue
+                idx = i - 2 * move_from_mate  # M_{N - move_from_mate}, tah matující strany
+                if idx < target_ply or idx >= i:
+                    ok = False
+                    break
+                ma = attrs[idx]
+                if not _attr_match(fm.get("check"), ma["check"]):
+                    ok = False; break
+                if not _attr_match(fm.get("capture"), ma["capture"]):
+                    ok = False; break
+                if not _attr_match(fm.get("promotion"), ma["promotion"]):
+                    ok = False; break
+            if not ok:
+                continue
+
+            # vystaveno: pozice před prvním tahem sekvence
+            fen = fens_before[target_ply]
+            board_at = chess.Board(fen)
+            mating_seq = " ".join(san_list[target_ply:i + 1])
+            data = {
+                **_game_meta(game, game_idx),
+                "ply": target_ply,
+                "fullmove": board_at.fullmove_number,
+                "side": _side(board_at),
+                "fen": fen,
+                "played": mating_seq,
+                "best": f"mate in {mate_in}",
+            }
+            yield _emit({"type": "match", "data": data})
+            matches_found += 1
+            if matches_found >= limit:
+                break
+            break  # max 1 mate sekvence per partii
+
+        if matches_found >= limit:
+            break
+
+    yield _emit({"type": "done", "games_scanned": games_scanned, "matches_total": matches_found})
 
 
 _MOVE_NUMBER_PREFIX_RE = __import__("re").compile(r"^\d+\.+")
