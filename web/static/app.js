@@ -170,21 +170,15 @@ async function openInLichess(e) {
 }
 
 function updateMoveCounter() {
-  if (!state.gameDetail) {
-    document.getElementById('move-counter').textContent = '0 / 0';
-    document.getElementById('last-move').textContent = '—';
+  const lastMoveEl = document.getElementById('last-move');
+  if (!state.gameDetail || state.currentMoveIdx === 0) {
+    lastMoveEl.textContent = '—';
     return;
   }
-  const total = state.gameDetail.moves_san.length;
-  document.getElementById('move-counter').textContent = `${state.currentMoveIdx} / ${total}`;
-  if (state.currentMoveIdx === 0) {
-    document.getElementById('last-move').textContent = '—';
-  } else {
-    const move = state.gameDetail.moves_san[state.currentMoveIdx - 1];
-    const fullmove = Math.ceil(state.currentMoveIdx / 2);
-    const dots = state.currentMoveIdx % 2 === 1 ? '.' : '...';
-    document.getElementById('last-move').textContent = `${fullmove}${dots} ${move}`;
-  }
+  const move = state.gameDetail.moves_san[state.currentMoveIdx - 1];
+  const fullmove = Math.ceil(state.currentMoveIdx / 2);
+  const dots = state.currentMoveIdx % 2 === 1 ? '.' : '...';
+  lastMoveEl.textContent = `${fullmove}${dots} ${move}`;
 }
 
 // -------- API --------

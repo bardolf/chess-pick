@@ -62,7 +62,7 @@ app.mount(
     StaticFiles(directory=Path(__file__).parent / "static"),
     name="static",
 )
-INDEX_HTML = (Path(__file__).parent / "templates" / "index.html").read_text(encoding="utf-8")
+INDEX_HTML_PATH = Path(__file__).parent / "templates" / "index.html"
 
 CLASSIFIER: OpeningClassifier | None = (
     OpeningClassifier(ECO_DIR) if ECO_DIR.is_dir() else None
@@ -75,8 +75,9 @@ CLASSIFIER: OpeningClassifier | None = (
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
-    # cache busting přes Cache-Control — vždy načti čerstvé HTML
-    return HTMLResponse(INDEX_HTML, headers={"Cache-Control": "no-store"})
+    # HTML čteme z disku při každém requestu — úpravy v šabloně se projeví bez restartu
+    html = INDEX_HTML_PATH.read_text(encoding="utf-8")
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 
