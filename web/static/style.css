@@ -544,63 +544,82 @@ body.light #open-in-lichess:hover { background: #3377dd; }
 
 .col.right .panel { flex: none; }
 
-/* Řada figurek v pravém sloupci */
+/* Šachovnice + figurky v pravém sloupci */
 .pieces-art {
   position: relative;
   flex: 1 1 auto;
-  min-height: 80px;
+  min-height: 140px;
   display: flex;
   align-items: center;
-  justify-content: space-around;
-  gap: 2px;
-  padding: 14px 4px;
+  justify-content: center;
+  padding: 10px 6px;
   overflow: visible;
 }
 
-.piece-cell {
+.chess-arena {
   position: relative;
-  flex: 1 1 0;
-  max-width: 56px;
+  width: 100%;
+  max-width: 460px;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  border: 2px solid #3d6db8;
+  border-radius: 4px;
+  background: #16243d;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45), inset 0 0 16px rgba(74, 144, 226, 0.18);
+  overflow: visible;
+}
+
+.chess-cell {
+  width: 100%;
+  height: 100%;
+}
+.chess-cell.light { background: rgba(122, 181, 255, 0.14); }
+.chess-cell.dark  { background: rgba(31, 78, 140, 0.32); }
+
+body.light .chess-arena {
+  background: #eaf1fb;
+  border-color: #6a92c8;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15), inset 0 0 14px rgba(74, 144, 226, 0.18);
+}
+body.light .chess-cell.light { background: rgba(122, 181, 255, 0.22); }
+body.light .chess-cell.dark  { background: rgba(31, 78, 140, 0.38); }
+
+.piece-cell {
+  position: absolute;
+  width: calc(100% / 8);
+  height: calc(100% / 8);
+  left: calc(var(--col, 0) * 100% / 8);
+  top:  calc(var(--row, 0) * 100% / 8);
+  transition: left 1.8s ease-in-out, top 1.8s ease-in-out;
   cursor: pointer;
   user-select: none;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
+  z-index: 2;
 }
 
 .piece-cell svg {
   width: 100%;
   height: auto;
-  filter: drop-shadow(0 4px 12px rgba(74, 144, 226, 0.35));
+  filter: drop-shadow(0 3px 8px rgba(74, 144, 226, 0.4));
   transition: filter 0.3s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   pointer-events: none;
 }
 
+.piece-cell:hover { z-index: 3; }
 .piece-cell:hover svg {
-  transform: translateY(-3px) scale(1.05);
-  filter: drop-shadow(0 6px 18px rgba(74, 144, 226, 0.6));
+  transform: translateY(-2px) scale(1.12);
+  filter: drop-shadow(0 5px 14px rgba(74, 144, 226, 0.7));
 }
 
 body.light .piece-cell svg {
-  filter: drop-shadow(0 3px 8px rgba(34, 102, 204, 0.22));
+  filter: drop-shadow(0 2px 6px rgba(34, 102, 204, 0.28));
 }
 body.light .piece-cell:hover svg {
-  filter: drop-shadow(0 5px 14px rgba(34, 102, 204, 0.4));
-}
-
-/* Pěšec se třese pořád — je mu zima */
-.piece-cell[data-piece="pawn"] svg {
-  animation: pawn-shiver 0.28s ease-in-out infinite;
-  transform-origin: 50% 90%;
-}
-.piece-cell[data-piece="pawn"]:hover svg {
-  animation-play-state: paused;
-}
-
-@keyframes pawn-shiver {
-  0%, 100% { transform: translateX(0) rotate(0); }
-  25%      { transform: translateX(-0.6px) rotate(-1.5deg); }
-  75%      { transform: translateX(0.6px) rotate(1.5deg); }
+  filter: drop-shadow(0 4px 12px rgba(34, 102, 204, 0.45));
 }
 
 /* Per-piece klik animace */

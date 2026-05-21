@@ -1133,19 +1133,77 @@ function randomSquare() {
   return FILES[Math.floor(Math.random() * 8)] + (Math.floor(Math.random() * 8) + 1);
 }
 
-function setupPiecesAnimations() {
-  document.querySelectorAll('.piece-cell').forEach(cell => {
-    cell.addEventListener('click', () => {
-      const pieceType = cell.dataset.piece;
-      if (!PIECE_EFFECTS[pieceType]) return;
+// Šachovnice — geometrie a generátory legálních tahů (bez ohledu na figurky navzájem)
+const BOARD_COLS = 8;
+const BOARD_ROWS = 8;
 
-      // CSS klik animace (restart třídy)
+const DIRS_8       = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+const DIRS_HV      = [[-1,0],[1,0],[0,-1],[0,1]];
+const DIRS_DIAG    = [[-1,-1],[-1,1],[1,-1],[1,1]];
+const KNIGHT_JUMPS = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+
+function inBounds(c, r) {
+  return c >= 0 && c < BOARD_COLS && r >= 0 && r < BOARD_ROWS;
+}
+
+function rayTargets(c, r, dirs) {
+  const out = [];
+  dirs.forEach(([dc, dr]) => {
+    for (let n = 1; n < Math.max(BOARD_COLS, BOARD_ROWS); n++) {
+      const nc = c + dc * n, nr = r + dr * n;
+      if (!inBounds(nc, nr)) break;
+      out.push([nc, nr]);
+    }
+  });
+  return out;
+}
+
+const MOVE_GENERATORS = {
+  king:   (c, r) => DIRS_8.map(([dc,dr]) => [c+dc, r+dr]).filter(([nc,nr]) => inBounds(nc, nr)),
+  queen:  (c, r) => rayTargets(c, r, DIRS_8),
+  rook:   (c, r) => rayTargets(c, r, DIRS_HV),
+  bishop: (c, r) => rayTargets(c, r, DIRS_DIAG),
+  knight: (c, r) => KNIGHT_JUMPS.map(([dc,dr]) => [c+dc, r+dr]).filter(([nc,nr]) => inBounds(nc, nr)),
+};
+
+const INITIAL_POSITIONS = {
+  king:   [1, 3],
+  queen:  [5, 5],
+  rook:   [7, 1],
+  bishop: [3, 4],
+  knight: [6, 6],
+  pawn:   [2, 0],
+};
+
+const piecePositions = new Map();
+
+function setupPiecesAnimations() {
+  const arena = document.querySelector('.chess-arena');
+  if (arena && !arena.querySelector('.chess-cell')) {
+    const frag = document.createDocumentFragment();
+    for (let r = 0; r < BOARD_ROWS; r++) {
+      for (let c = 0; c < BOARD_COLS; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'chess-cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+        frag.appendChild(cell);
+      }
+    }
+    arena.insertBefore(frag, arena.firstChild);
+  }
+
+  document.querySelectorAll('.piece-cell').forEach(cell => {
+    const type = cell.dataset.piece;
+    const [c, r] = INITIAL_POSITIONS[type] || [0, 0];
+    setPiecePosition(cell, c, r);
+
+    cell.addEventListener('click', () => {
+      if (!PIECE_EFFECTS[type]) return;
+
       cell.classList.remove('active');
       void cell.offsetWidth;
       cell.classList.add('active');
       setTimeout(() => cell.classList.remove('active'), 1200);
 
-      // Bublina s náhodným políčkem
       const bubble = cell.querySelector('.piece-bubble');
       if (bubble) {
         bubble.textContent = randomSquare() + '!';
@@ -1154,10 +1212,36 @@ function setupPiecesAnimations() {
         bubble.classList.add('show');
       }
 
-      // Částice
-      spawnPieceParticles(cell, pieceType);
+      spawnPieceParticles(cell, type);
     });
+
+    // Pěšec stojí, ostatní se procházejí po šachovnici
+    if (MOVE_GENERATORS[type]) {
+      scheduleNextMove(cell);
+    }
   });
+}
+
+function setPiecePosition(cell, c, r) {
+  cell.style.setProperty('--col', c);
+  cell.style.setProperty('--row', r);
+  piecePositions.set(cell, [c, r]);
+}
+
+function scheduleNextMove(cell) {
+  const delay = 2200 + Math.random() * 2600;
+  setTimeout(() => {
+    const type = cell.dataset.piece;
+    const gen = MOVE_GENERATORS[type];
+    if (!gen) return;
+    const [c, r] = piecePositions.get(cell);
+    const targets = gen(c, r);
+    if (targets.length > 0) {
+      const [nc, nr] = targets[Math.floor(Math.random() * targets.length)];
+      setPiecePosition(cell, nc, nr);
+    }
+    scheduleNextMove(cell);
+  }, delay);
 }
 
 function spawnPieceParticles(cell, pieceType) {
