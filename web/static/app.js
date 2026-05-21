@@ -238,13 +238,13 @@ let currentMatches = [];
 function updateExportPdfButton() {
   const btn = document.getElementById('btn-export-pdf');
   if (!btn) return;
-  const allowed = (state.selectedRule === 'blunder' || state.selectedRule === 'zwischenzug');
+  const allowed = ['blunder', 'zwischenzug', 'mate'].includes(state.selectedRule);
   btn.disabled = !(allowed && currentMatches.length > 0);
   btn.title = allowed
     ? (currentMatches.length > 0
         ? `Stáhnout ${currentMatches.length} pozic jako PDF (client-side)`
         : 'Po spuštění analýzy ti tu nabídnu PDF s diagramy')
-    : 'PDF export je dostupný jen pro rule 1 a rule 2';
+    : 'PDF export není pro toto pravidlo k dispozici (jen rule 1, 2, 4)';
 }
 
 // ---- Client-side PDF generation pomocí jsPDF ----
@@ -329,7 +329,7 @@ function drawBoardOnPdf(pdf, fen, x, y, size) {
 
 async function exportPdf() {
   if (currentMatches.length === 0) return;
-  if (state.selectedRule !== 'blunder' && state.selectedRule !== 'zwischenzug') return;
+  if (!['blunder', 'zwischenzug', 'mate'].includes(state.selectedRule)) return;
   const btn = document.getElementById('btn-export-pdf');
   const orig = btn.textContent;
   btn.disabled = true;
@@ -436,7 +436,14 @@ async function exportPdf() {
       pdf.setFont('helvetica', 'bold');
       pdf.text(`#${i + 1}`, MARGIN_X, sy);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(`${side}: best = ${best}    (played: ${played})`, MARGIN_X + 10, sy);
+      let solutionLine;
+      if (state.selectedRule === 'mate') {
+        // Pro mate: vypisujeme celou matovou sekvenci
+        solutionLine = `${side}, ${best}: ${played}`;
+      } else {
+        solutionLine = `${side}: best = ${best}    (played: ${played})`;
+      }
+      pdf.text(solutionLine, MARGIN_X + 10, sy);
       const players = `${asciiText(m.white)} - ${asciiText(m.black)}`;
       const event = m.event && m.event !== '?' ? ` | ${asciiText(m.event)}` : '';
       const year = m.date && m.date !== '?' ? ` ${m.date.split('.')[0]}` : '';
