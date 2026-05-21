@@ -1146,12 +1146,13 @@ function inBounds(c, r) {
   return c >= 0 && c < BOARD_COLS && r >= 0 && r < BOARD_ROWS;
 }
 
-function rayTargets(c, r, dirs) {
+function rayTargets(c, r, dirs, isBlocked) {
   const out = [];
   dirs.forEach(([dc, dr]) => {
     for (let n = 1; n < Math.max(BOARD_COLS, BOARD_ROWS); n++) {
       const nc = c + dc * n, nr = r + dr * n;
       if (!inBounds(nc, nr)) break;
+      if (isBlocked(nc, nr)) break; // narazila na cizí figurku — dál nesmí
       out.push([nc, nr]);
     }
   });
@@ -1159,11 +1160,11 @@ function rayTargets(c, r, dirs) {
 }
 
 const MOVE_GENERATORS = {
-  king:   (c, r) => DIRS_8.map(([dc,dr]) => [c+dc, r+dr]).filter(([nc,nr]) => inBounds(nc, nr)),
-  queen:  (c, r) => rayTargets(c, r, DIRS_8),
-  rook:   (c, r) => rayTargets(c, r, DIRS_HV),
-  bishop: (c, r) => rayTargets(c, r, DIRS_DIAG),
-  knight: (c, r) => KNIGHT_JUMPS.map(([dc,dr]) => [c+dc, r+dr]).filter(([nc,nr]) => inBounds(nc, nr)),
+  king:   (c, r, blk) => DIRS_8.map(([dc,dr]) => [c+dc, r+dr]).filter(([nc,nr]) => inBounds(nc, nr) && !blk(nc, nr)),
+  queen:  (c, r, blk) => rayTargets(c, r, DIRS_8, blk),
+  rook:   (c, r, blk) => rayTargets(c, r, DIRS_HV, blk),
+  bishop: (c, r, blk) => rayTargets(c, r, DIRS_DIAG, blk),
+  knight: (c, r, blk) => KNIGHT_JUMPS.map(([dc,dr]) => [c+dc, r+dr]).filter(([nc,nr]) => inBounds(nc, nr) && !blk(nc, nr)),
 };
 
 const INITIAL_POSITIONS = {
@@ -1172,10 +1173,11 @@ const INITIAL_POSITIONS = {
   rook:   [7, 1],
   bishop: [3, 4],
   knight: [6, 6],
-  pawn:   [2, 0],
+  pawn:   [4, 0],
 };
 
 const piecePositions = new Map();
+let pawnDx = -1; // pěšec startuje doleva
 
 function setupPiecesAnimations() {
   const arena = document.querySelector('.chess-arena');
@@ -1215,11 +1217,65 @@ function setupPiecesAnimations() {
       spawnPieceParticles(cell, type);
     });
 
-    // Pěšec stojí, ostatní se procházejí po šachovnici
     if (MOVE_GENERATORS[type]) {
       scheduleNextMove(cell);
+    } else if (type === 'pawn') {
+      scheduleNextPawnMove(cell);
     }
   });
+}
+
+function scheduleNextPawnMove(cell) {
+  const delay = 2400 + Math.random() * 2400;
+  setTimeout(() => {
+    pawnTurn(cell);
+    scheduleNextPawnMove(cell);
+  }, delay);
+}
+
+function pawnTurn(cell) {
+  const [c, r] = piecePositions.get(cell);
+  const newC = c + pawnDx;
+
+  // Sjel z desky — promotion fail, "!?" a teleport do levého horního rohu
+  if (newC < 0 || newC >= BOARD_COLS) {
+    pawnFreakout(cell);
+    pawnDx = 1; // další směr "rovně" je teď doprava
+    return;
+  }
+
+  // Blokuje jiná figurka? Tento tah přeskočíme, ale směr nehází
+  for (const [other, pos] of piecePositions) {
+    if (other !== cell && pos[0] === newC && pos[1] === r) return;
+  }
+
+  setPiecePosition(cell, newC, r);
+}
+
+function pawnFreakout(cell) {
+  const bubble = cell.querySelector('.piece-bubble');
+  if (bubble) {
+    bubble.textContent = '!?';
+    bubble.classList.remove('show');
+    void bubble.offsetWidth;
+    bubble.classList.add('show');
+  }
+  spawnPieceParticles(cell, 'pawn');
+
+  // Třes (jako klik)
+  cell.classList.remove('active');
+  void cell.offsetWidth;
+  cell.classList.add('active');
+  setTimeout(() => cell.classList.remove('active'), 1100);
+
+  // Teleport bez animace na (0, 0) — disable transition na jeden frame
+  setTimeout(() => {
+    cell.style.transition = 'none';
+    setPiecePosition(cell, 0, 0);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { cell.style.transition = ''; });
+    });
+  }, 380);
 }
 
 function setPiecePosition(cell, c, r) {
@@ -1235,7 +1291,14 @@ function scheduleNextMove(cell) {
     const gen = MOVE_GENERATORS[type];
     if (!gen) return;
     const [c, r] = piecePositions.get(cell);
-    const targets = gen(c, r);
+
+    const occupied = new Set();
+    for (const [other, pos] of piecePositions) {
+      if (other !== cell) occupied.add(pos[0] + ',' + pos[1]);
+    }
+    const isBlocked = (nc, nr) => occupied.has(nc + ',' + nr);
+
+    const targets = gen(c, r, isBlocked);
     if (targets.length > 0) {
       const [nc, nr] = targets[Math.floor(Math.random() * targets.length)];
       setPiecePosition(cell, nc, nr);
