@@ -8,23 +8,63 @@ pozice, které si uživatel pak sám řeší.
 
 - Python 3.12+
 - [python-chess](https://python-chess.readthedocs.io/) (UCI komunikace + PGN parser)
-- Stockfish (lokálně, default cesta `~/opt/stockfish/stockfish-ubuntu-x86-64-avx2`)
+- Stockfish (lokálně) — viz [Stockfish](#stockfish) níže
 - pytest (pro testy)
 
-## Setup
+## Setup (Linux / macOS)
 
 ```bash
 python -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 ```
 
-Cestu ke Stockfishi případně uprav v `evaluate.py` (`STOCKFISH_PATH`).
+## Setup (Windows)
 
-## Spuštění
+```powershell
+python -m venv .venv
+.venv\Scripts\pip install -r requirements-dev.txt
+```
+
+(stejné kroky, jen jiné cesty k venv binárkám — `Scripts\` místo `bin/`)
+
+## Stockfish
+
+`evaluate.py` hledá Stockfish v tomto pořadí:
+
+1. env proměnná **`STOCKFISH_PATH`**
+2. `./stockfish.exe` nebo `./stockfish` v kořeni projektu
+3. (dev) `/home/milan/opt/stockfish/stockfish-ubuntu-x86-64-avx2`
+
+**Linux**: stáhni z [stockfishchess.org/download](https://stockfishchess.org/download/),
+nebo `apt install stockfish`, a pak:
 
 ```bash
-.venv/bin/python main.py
+export STOCKFISH_PATH=/usr/games/stockfish     # nebo kde ho máš
 ```
+
+**Windows**: stáhni `stockfish-windows-x86-64-avx2.zip` z
+[stockfishchess.org/download](https://stockfishchess.org/download/), rozbal,
+a buď přejmenuj `.exe` na `stockfish.exe` do kořene projektu, nebo nastav:
+
+```powershell
+$env:STOCKFISH_PATH = "C:\path\to\stockfish.exe"
+```
+
+## Spuštění CLI
+
+```bash
+.venv/bin/python main.py            # Linux / macOS
+.venv\Scripts\python main.py        # Windows
+```
+
+## Spuštění webové aplikace
+
+```bash
+.venv/bin/uvicorn web.app:app --host 127.0.0.1 --port 8000 --reload     # Linux / macOS
+.venv\Scripts\uvicorn web.app:app --host 127.0.0.1 --port 8000 --reload # Windows
+```
+
+Pak otevři `http://127.0.0.1:8000` v prohlížeči.
 
 Defaultní chování:
 - Projde všechny `*.pgn` v `twic/`
