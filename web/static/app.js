@@ -26,6 +26,8 @@ const RULE_DEFS = {
       'Hledá pozice, kde hráč zahrál tah výrazně horší než nejlepší tah dle Stockfishe. ' +
       'Spouští se přes všechny partie ve vybraném PGN.',
     params: [
+      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
+        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
       { key: 'min_loss_cp', label: 'min ztráta (cp)', type: 'number', default: 100,
         hint: 'Tah je blunder, pokud je horší o tolik centipawnů nebo víc. 100 cp = 1 pěšec.' },
       { key: 'tie_tolerance_cp', label: 'tie tolerance (cp)', type: 'number', default: 20,
@@ -42,6 +44,8 @@ const RULE_DEFS = {
       'Hledá pozice, kde po soupeřově braní engine doporučuje non-recapture (mezitah). ' +
       'Spouští se přes všechny partie ve vybraném PGN.',
     params: [
+      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
+        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
       { key: 'min_gain_cp', label: 'min gain (cp)', type: 'number', default: 100,
         hint: 'O kolik musí být mezitah lepší než nejlepší rekapitulace, aby pravidlo fires (cp). Ignoruje se, když je mezitah šach a "šach ignoruje gap" je zapnuté.' },
       { key: 'require_check_or_capture', label: 'jen šach / branný', type: 'checkbox', default: true,
@@ -62,6 +66,8 @@ const RULE_DEFS = {
       'Hledá partie, ve kterých vznikla zadaná struktura figurek a pěšců. ' +
       'Spouští se přes všechny partie ve vybraném PGN.',
     params: [
+      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
+        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
       { key: 'fen', label: 'FEN', type: 'text', default: '8/8/8/8/3P4/4P3/PP3PPP/8 w - - 0 1',
         hint: 'Pravidlo se dívá doslova na FEN — všechny zadané figurky musí být na svých čtvercích, té barvy a typu. Subset match: ostatní pole jsou libovolná.',
         extra: 'fen-buttons' },
@@ -350,30 +356,41 @@ async function exportPdf() {
       const cellX = MARGIN_X + col * CELL_W;
       const cellYTop = MARGIN_TOP + row * CELL_H;
       const boardX = cellX + (CELL_W - BOARD_SIZE) / 2;
-      const boardY = cellYTop + 10;
+      const boardY = cellYTop + 14;  // 14 mm rezerva nahoře pro dvouřádkový header
 
-      // index
+      // Řádek 1 (větší, tučný): #N + jména hráčů
       pdf.setFontSize(11);
       pdf.setFont('helvetica', 'bold');
-      pdf.text(`#${i + 1}`, boardX, boardY - 3);
-
-      // game info (jednoduchá truncace podle délky znaků)
-      pdf.setFontSize(9);
+      const idxStr = `#${i + 1}`;
+      pdf.text(idxStr, boardX, boardY - 8);
+      // jména v normálním řezu, posunutá doprava o pevný offset (vejde se i #99/999)
       pdf.setFont('helvetica', 'normal');
+      const PLAYERS_OFFSET = 12;
       const players = `${asciiText(m.white || '?')} - ${asciiText(m.black || '?')}`;
+      let playersLine = players;
+      const MAX_PLAYERS_CHARS = 50;
+      if (playersLine.length > MAX_PLAYERS_CHARS) {
+        playersLine = playersLine.slice(0, MAX_PLAYERS_CHARS - 2) + '..';
+      }
+      pdf.text(playersLine, boardX + PLAYERS_OFFSET, boardY - 8);
+
+      // Řádek 2 (menší, šedý): turnaj + rok
       let extras = '';
-      if (m.event && m.event !== '?') extras += ' | ' + asciiText(m.event);
+      if (m.event && m.event !== '?') extras += asciiText(m.event);
       if (m.date && m.date !== '?') {
         const year = m.date.split('.')[0];
-        if (year && !extras.includes(year)) extras += ' ' + year;
+        if (year && !extras.includes(year)) extras += (extras ? ' ' : '') + year;
       }
-      let infoLine = players + extras;
-      // BOARD_SIZE ~95 mm, font 9pt → ~60 znaků se vejde
-      const MAX_INFO_CHARS = 60;
-      if (infoLine.length > MAX_INFO_CHARS) {
-        infoLine = infoLine.slice(0, MAX_INFO_CHARS - 2) + '..';
+      if (extras) {
+        const MAX_EXTRAS_CHARS = 60;
+        if (extras.length > MAX_EXTRAS_CHARS) {
+          extras = extras.slice(0, MAX_EXTRAS_CHARS - 2) + '..';
+        }
+        pdf.setFontSize(8);
+        pdf.setTextColor(110);
+        pdf.text(extras, boardX + PLAYERS_OFFSET, boardY - 3);
+        pdf.setTextColor(0);
       }
-      pdf.text(infoLine, boardX + 10, boardY - 3);
 
       // board
       drawBoardOnPdf(pdf, m.fen, boardX, boardY, BOARD_SIZE);

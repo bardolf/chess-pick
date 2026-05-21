@@ -35,6 +35,7 @@ from pydantic import BaseModel
 from cache import EvalCache
 from evaluate import STOCKFISH_PATH
 from filters import (
+    MinElo,
     OpeningPositionMatches,
     PawnStructureMatches,
     PlayedMoveLossAtLeast,
@@ -252,6 +253,18 @@ def _game_meta(game: chess.pgn.Game, game_idx: int) -> dict:
     }
 
 
+def _build_elo_rule(params: dict):
+    """Vrátí MinElo pravidlo, pokud params obsahuje kladnou hodnotu, jinak None.
+    Při 0 / chybějícím parametru se filtr Elo vůbec neaplikuje."""
+    try:
+        min_elo = int(params.get("min_elo") or 0)
+    except (TypeError, ValueError):
+        min_elo = 0
+    if min_elo <= 0:
+        return None
+    return MinElo(threshold=min_elo, both=True)
+
+
 def _stream_pawn_structure(pgn_path: Path, params: dict, limit: int):
     fen = params.get("fen", "")
     if not fen:
@@ -267,6 +280,7 @@ def _stream_pawn_structure(pgn_path: Path, params: dict, limit: int):
             return
         opening_rule = OpeningPositionMatches(target_fen)
     structure_rule = PawnStructureMatches(fen=fen)
+    elo_rule = _build_elo_rule(params)
 
     yield _emit({"type": "start", "rule": "pawn_structure", "limit": limit})
     games_scanned = 0
@@ -275,6 +289,8 @@ def _stream_pawn_structure(pgn_path: Path, params: dict, limit: int):
         games_scanned += 1
         if games_scanned % 100 == 0:
             yield _emit({"type": "progress", "games_scanned": games_scanned, "matches_found": matches_found})
+        if elo_rule is not None and not elo_rule.match(game):
+            continue
         if opening_rule is not None and not opening_rule.match(game):
             continue
         board = game.board()
@@ -314,6 +330,8 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int):
 
     yield _emit({"type": "start", "rule": rule_name, "limit": limit, "depth": depth, "multipv": multipv})
 
+    elo_rule = _build_elo_rule(params)
+    game_rules = [elo_rule] if elo_rule is not None else []
     game_idx_map: dict[int, int] = {}
 
     def games_with_index():
@@ -329,7 +347,7 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int):
                 for ctx in find_positions(
                     games_with_index(),
                     cache,
-                    game_rules=[],
+                    game_rules=game_rules,
                     position_rules=[rule],
                     depth=depth,
                     multipv=multipv,
