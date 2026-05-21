@@ -329,7 +329,10 @@ function drawBoardOnPdf(pdf, fen, x, y, size) {
 
 async function exportPdf() {
   if (currentMatches.length === 0) return;
-  if (!['blunder', 'zwischenzug', 'mate'].includes(state.selectedRule)) return;
+  if (!['blunder', 'zwischenzug', 'mate'].includes(state.selectedRule)) {
+    alert('PDF export není pro toto pravidlo k dispozici (jen Rule 1 — Blunder, Rule 2 — Zwischenzug a Rule 4 — Mate).');
+    return;
+  }
   const btn = document.getElementById('btn-export-pdf');
   const orig = btn.textContent;
   btn.disabled = true;
