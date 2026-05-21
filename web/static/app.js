@@ -29,7 +29,7 @@ const RULE_DEFS = {
       { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
         hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
       { key: 'min_loss_cp', label: 'min ztráta (cp)', type: 'number', default: 100,
-        hint: 'Tah je blunder, pokud je horší o tolik centipawnů nebo víc. 100 cp = 1 pěšec.' },
+        hint: 'Tah je mistake/blunder, pokud je horší o tolik centipawnů nebo víc. 100 cp = 1 pěšec.' },
       { key: 'tie_tolerance_cp', label: 'tie tolerance (cp)', type: 'number', default: 20,
         hint: 'Tahy do této vzdálenosti od top tahu se považují za rovnocenné. Hráč není ve chybě, když zahrál jeden z nich.' },
       { key: 'depth', label: 'depth', type: 'number', default: 16,
