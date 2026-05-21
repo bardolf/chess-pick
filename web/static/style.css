@@ -544,8 +544,200 @@ body.light #open-in-lichess:hover { background: #3377dd; }
 
 .col.right .panel { flex: none; }
 
+/* Řada figurek v pravém sloupci */
+.pieces-art {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 2px;
+  padding: 14px 4px;
+  overflow: visible;
+}
+
+.piece-cell {
+  position: relative;
+  flex: 1 1 0;
+  max-width: 56px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.piece-cell svg {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 4px 12px rgba(74, 144, 226, 0.35));
+  transition: filter 0.3s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.piece-cell:hover svg {
+  transform: translateY(-3px) scale(1.05);
+  filter: drop-shadow(0 6px 18px rgba(74, 144, 226, 0.6));
+}
+
+body.light .piece-cell svg {
+  filter: drop-shadow(0 3px 8px rgba(34, 102, 204, 0.22));
+}
+body.light .piece-cell:hover svg {
+  filter: drop-shadow(0 5px 14px rgba(34, 102, 204, 0.4));
+}
+
+/* Pěšec se třese pořád — je mu zima */
+.piece-cell[data-piece="pawn"] svg {
+  animation: pawn-shiver 0.28s ease-in-out infinite;
+  transform-origin: 50% 90%;
+}
+.piece-cell[data-piece="pawn"]:hover svg {
+  animation-play-state: paused;
+}
+
+@keyframes pawn-shiver {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25%      { transform: translateX(-0.6px) rotate(-1.5deg); }
+  75%      { transform: translateX(0.6px) rotate(1.5deg); }
+}
+
+/* Per-piece klik animace */
+.piece-cell.active[data-piece="king"] svg {
+  animation: king-hop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 6px 22px rgba(255, 215, 0, 0.7));
+}
+@keyframes king-hop {
+  0%   { transform: translateY(0) rotate(0); }
+  30%  { transform: translateY(-28px) rotate(-8deg) scale(1.1); }
+  55%  { transform: translateY(-34px) rotate(6deg) scale(1.12); }
+  85%  { transform: translateY(-2px) rotate(-2deg) scale(0.96); }
+  100% { transform: translateY(0) rotate(0) scale(1); }
+}
+
+.piece-cell.active[data-piece="queen"] svg {
+  animation: queen-spin 0.9s ease-in-out;
+  filter: drop-shadow(0 6px 22px rgba(255, 130, 240, 0.7));
+}
+@keyframes queen-spin {
+  0%   { transform: rotate(0) scale(1); }
+  20%  { transform: translateY(-10px) rotate(120deg) scale(1.1); }
+  50%  { transform: translateY(-20px) rotate(360deg) scale(1.15); }
+  80%  { transform: translateY(-6px) rotate(680deg) scale(1.05); }
+  100% { transform: translateY(0) rotate(720deg) scale(1); }
+}
+
+.piece-cell.active[data-piece="rook"] svg {
+  animation: rook-stomp 0.7s ease-out;
+  filter: drop-shadow(0 6px 22px rgba(180, 180, 180, 0.7));
+}
+@keyframes rook-stomp {
+  0%   { transform: translateY(-22px) scale(1.1); }
+  35%  { transform: translateY(0) scaleX(1.25) scaleY(0.75); }
+  55%  { transform: translateY(-6px) scaleX(0.95) scaleY(1.05); }
+  80%  { transform: translateY(0) scaleX(1.05) scaleY(0.95); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.piece-cell.active[data-piece="bishop"] svg {
+  animation: bishop-float 1.1s ease-in-out;
+  filter: drop-shadow(0 6px 22px rgba(160, 220, 255, 0.85));
+}
+@keyframes bishop-float {
+  0%   { transform: translateY(0) rotate(0); }
+  30%  { transform: translateY(-22px) rotate(-4deg); }
+  50%  { transform: translateY(-32px) rotate(4deg) scale(1.08); }
+  70%  { transform: translateY(-22px) rotate(-2deg); }
+  100% { transform: translateY(0) rotate(0); }
+}
+
+.piece-cell.active[data-piece="knight"] svg {
+  animation: knight-jump 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 6px 22px rgba(255, 80, 30, 0.75));
+}
+@keyframes knight-jump {
+  0%   { transform: translateY(0) scale(1) rotate(0); }
+  20%  { transform: translateY(-30px) scale(1.1) rotate(-12deg); }
+  45%  { transform: translateY(-42px) scale(1.15) rotate(14deg); }
+  75%  { transform: translateY(-5px) scale(0.94) rotate(-5deg); }
+  100% { transform: translateY(0) scale(1) rotate(0); }
+}
+
+.piece-cell.active[data-piece="pawn"] svg {
+  animation: pawn-shiver-strong 0.7s ease-in-out;
+  filter: drop-shadow(0 4px 14px rgba(160, 220, 255, 0.8));
+}
+@keyframes pawn-shiver-strong {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  10% { transform: translateX(-4px) rotate(-5deg); }
+  20% { transform: translateX(4px) rotate(5deg); }
+  30% { transform: translateX(-4px) rotate(-5deg); }
+  40% { transform: translateX(4px) rotate(5deg); }
+  50% { transform: translateX(-3px) rotate(-4deg); }
+  60% { transform: translateX(3px) rotate(4deg); }
+  70% { transform: translateX(-2px) rotate(-3deg); }
+  80% { transform: translateX(2px) rotate(3deg); }
+  90% { transform: translateX(-1px); }
+}
+
+/* Částice — barvy / velikosti řízeny z JS přes inline styly */
+.piece-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  transform-origin: 0 0;
+  animation: piece-burst var(--duration) ease-out forwards;
+  z-index: 5;
+}
+
+@keyframes piece-burst {
+  0%   { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(1.1); opacity: 1; }
+  60%  { opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(-1 * var(--distance))) scale(0.2); opacity: 0; }
+}
+
+/* Bublina s políčkem nad figurkou */
+.piece-bubble {
+  position: absolute;
+  bottom: calc(100% - 4px);
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  background: linear-gradient(135deg, #4a90e2, #1f4e8c);
+  color: #fff;
+  padding: 3px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  z-index: 20;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.piece-bubble.show {
+  animation: bubble-pop 1.4s ease-out;
+}
+
+@keyframes bubble-pop {
+  0%   { transform: translateX(-50%) translateY(4px) scale(0.3); opacity: 0; }
+  15%  { transform: translateX(-50%) translateY(-6px) scale(1.15); opacity: 1; }
+  25%  { transform: translateX(-50%) translateY(-8px) scale(1); opacity: 1; }
+  80%  { transform: translateX(-50%) translateY(-8px) scale(1); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(-16px) scale(0.85); opacity: 0; }
+}
+
+body.light .piece-bubble {
+  background: linear-gradient(135deg, #2266cc, #14467f);
+}
+
 .analyze-section {
-  margin-top: auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -553,6 +745,7 @@ body.light #open-in-lichess:hover { background: #3377dd; }
   border-top: 1px solid #333;
   background: #1a1a1a;
 }
+
 
 #btn-analyze {
   flex: 1;

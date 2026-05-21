@@ -1112,8 +1112,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initBoard();
   setupEvents();
+  setupPiecesAnimations();
   document.getElementById('rule-select').value = state.selectedRule;
   renderRuleUI();
   updateExportPdfButton();
   fetchPgns();
 });
+
+const PIECE_EFFECTS = {
+  king:   { colors: ['#ffd700', '#ffaa00', '#ffe060', '#fff080'],            count: 14, distance: 55, blur: 1, size: [8, 16]  },
+  queen:  { colors: ['#ff80ff', '#ffaaff', '#80ffff', '#ffff80', '#ffd0ff'], count: 20, distance: 65, blur: 1, size: [6, 12]  },
+  rook:   { colors: ['#aaa', '#888', '#bbb', '#666'],                        count: 12, distance: 38, blur: 3, size: [12, 22] },
+  bishop: { colors: ['#a0e0ff', '#ffffff', '#80c0ff', '#d0f0ff'],            count: 14, distance: 60, blur: 1, size: [8, 14]  },
+  knight: { colors: ['#ffe060', '#ff8030', '#ff4020', '#ff2010', '#c00000'], count: 16, distance: 70, blur: 2, size: [14, 24] },
+  pawn:   { colors: ['#cceaff', '#ffffff', '#a0d8f0', '#e8f5ff'],            count: 14, distance: 42, blur: 1, size: [5, 10]  },
+};
+
+const FILES = ['a','b','c','d','e','f','g','h'];
+function randomSquare() {
+  return FILES[Math.floor(Math.random() * 8)] + (Math.floor(Math.random() * 8) + 1);
+}
+
+function setupPiecesAnimations() {
+  document.querySelectorAll('.piece-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const pieceType = cell.dataset.piece;
+      if (!PIECE_EFFECTS[pieceType]) return;
+
+      // CSS klik animace (restart třídy)
+      cell.classList.remove('active');
+      void cell.offsetWidth;
+      cell.classList.add('active');
+      setTimeout(() => cell.classList.remove('active'), 1200);
+
+      // Bublina s náhodným políčkem
+      const bubble = cell.querySelector('.piece-bubble');
+      if (bubble) {
+        bubble.textContent = randomSquare() + '!';
+        bubble.classList.remove('show');
+        void bubble.offsetWidth;
+        bubble.classList.add('show');
+      }
+
+      // Částice
+      spawnPieceParticles(cell, pieceType);
+    });
+  });
+}
+
+function spawnPieceParticles(cell, pieceType) {
+  const cfg = PIECE_EFFECTS[pieceType];
+  const [sMin, sMax] = cfg.size;
+  for (let i = 0; i < cfg.count; i++) {
+    const p = document.createElement('div');
+    p.className = 'piece-particle';
+    const angle = (360 / cfg.count) * i + (Math.random() - 0.5) * 25;
+    const distance = cfg.distance * (0.7 + Math.random() * 0.6);
+    const duration = 0.55 + Math.random() * 0.45;
+    const size = sMin + Math.random() * (sMax - sMin);
+    const color = cfg.colors[Math.floor(Math.random() * cfg.colors.length)];
+    p.style.setProperty('--angle', angle + 'deg');
+    p.style.setProperty('--distance', distance + 'px');
+    p.style.setProperty('--duration', duration + 's');
+    p.style.width = size + 'px';
+    p.style.height = size + 'px';
+    p.style.background = `radial-gradient(circle, ${color} 0%, transparent 70%)`;
+    p.style.filter = `blur(${cfg.blur}px)`;
+    cell.appendChild(p);
+    setTimeout(() => p.remove(), duration * 1000 + 100);
+  }
+}
