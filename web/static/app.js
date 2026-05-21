@@ -60,6 +60,20 @@ const RULE_DEFS = {
         hint: 'Kolik nejlepších linií engine počítá. Vyšší = lepší rekapitulační eval.' },
     ],
   },
+  mate: {
+    label: 'Rule 4 — Mat (mate in N)',
+    description:
+      'Hledá pozice s vynuceným matem v zadaném počtu tahů (1–5). ' +
+      'Pro mat v 1 stačí najít pozici s matujícím tahem. ' +
+      'Pro mat v 2 a víc můžeš popsat vlastnosti každého tahu vedoucího k matu ' +
+      '(šach? braní? promotion?).',
+    params: [
+      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
+        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
+    ],
+    // dynamický UI — vlastní renderer
+    customRender: true,
+  },
   pawn_structure: {
     label: 'Rule 3 — Struktura / rozestavění',
     description:
@@ -680,6 +694,13 @@ function renderRuleUI() {
   document.getElementById('rule-description').textContent = def.description;
   const container = document.getElementById('rule-params');
   container.innerHTML = '';
+
+  // Mate rule má custom dynamický UI — nejdřív bežné parametry, pak řádky pro tahy.
+  if (state.selectedRule === 'mate') {
+    renderMateUI(container, def);
+    return;
+  }
+
   for (const p of def.params) {
     const wrap = document.createElement('div');
     wrap.className = 'param';
@@ -742,7 +763,176 @@ function renderRuleUI() {
   }
 }
 
+// ---- Mate rule (Rule 4) custom UI ----
+
+const MATE_ATTRS = [
+  { key: 'check',     label: 'šach',      options: ['nezáleží', 'ano', 'ne'] },
+  { key: 'capture',   label: 'braní',     options: ['nezáleží', 'ano', 'ne'] },
+  { key: 'promotion', label: 'promotion', options: ['nezáleží', 'ano', 'ne'] },
+];
+
+function renderMateUI(container, def) {
+  // 1) min_elo (sdílený)
+  for (const p of def.params) {
+    container.appendChild(buildPlainParam(p));
+  }
+
+  // 2) mat za N tahů (dropdown 1-5)
+  const storedN = localStorage.getItem(paramStorageKey('mate', 'mate_in'));
+  const mateIn = storedN ? Math.max(1, Math.min(5, parseInt(storedN))) : 3;
+
+  const mateInWrap = document.createElement('div');
+  mateInWrap.className = 'param';
+  const mateInLbl = document.createElement('label');
+  const mateInSpan = document.createElement('span');
+  mateInSpan.textContent = 'mat za N tahů';
+  mateInLbl.appendChild(mateInSpan);
+  const mateInSel = document.createElement('select');
+  mateInSel.className = 'mate-select';
+  for (const n of [1, 2, 3, 4, 5]) {
+    const opt = document.createElement('option');
+    opt.value = String(n);
+    opt.textContent = String(n);
+    if (n === mateIn) opt.selected = true;
+    mateInSel.appendChild(opt);
+  }
+  mateInSel.addEventListener('change', () => {
+    localStorage.setItem(paramStorageKey('mate', 'mate_in'), mateInSel.value);
+    renderRuleUI();
+  });
+  mateInLbl.appendChild(mateInSel);
+  mateInWrap.appendChild(mateInLbl);
+
+  const mateInHint = document.createElement('div');
+  mateInHint.className = 'param-hint';
+  mateInHint.textContent = 'Počet tahů do matu (1–5). Pro 1 = přímý mat v 1 tahu, žádný předchozí tah. Pro 2+ se zobrazí (N-1) řádků k popisu tahů PŘED matem.';
+  mateInWrap.appendChild(mateInHint);
+  container.appendChild(mateInWrap);
+
+  if (mateIn === 1) return;
+
+  // 3) Pro každý tah PŘED matem (mat-{N-1}, mat-{N-2}, ..., mat-1) jeden řádek
+  for (let m = mateIn - 1; m >= 1; m--) {
+    container.appendChild(buildMateMoveRow(m));
+  }
+
+  // 4) Společný popisek pod tahy
+  const overall = document.createElement('div');
+  overall.className = 'param-hint';
+  overall.style.marginLeft = '0';
+  overall.style.marginTop = '6px';
+  overall.textContent =
+    'Pro každý tah popíšeš jeho povinné vlastnosti. „nezáleží" = filter ignoruje. ' +
+    'Tahy se aplikují obě barvy dohromady (matující strana i protivník) — řádek mat-1 ' +
+    'je tah těsně před matem, mat-{N-1} je nejvzdálenější.';
+  container.appendChild(overall);
+}
+
+function buildMateMoveRow(moveIndex) {
+  // moveIndex = vzdálenost od matu, 1 = těsně před matem
+  const row = document.createElement('div');
+  row.className = 'mate-row';
+
+  const title = document.createElement('div');
+  title.className = 'mate-row-title';
+  title.textContent = `tah mat-${moveIndex}`;
+  row.appendChild(title);
+
+  for (const attr of MATE_ATTRS) {
+    const sk = paramStorageKey('mate', `move_${moveIndex}_${attr.key}`);
+    const stored = localStorage.getItem(sk);
+    const value = stored != null ? stored : attr.options[0];  // default 'nezáleží'
+
+    const cell = document.createElement('label');
+    cell.className = 'mate-cell';
+    const lbl = document.createElement('span');
+    lbl.textContent = attr.label;
+    cell.appendChild(lbl);
+
+    const sel = document.createElement('select');
+    sel.dataset.mateMove = String(moveIndex);
+    sel.dataset.mateAttr = attr.key;
+    for (const o of attr.options) {
+      const opt = document.createElement('option');
+      opt.value = o;
+      opt.textContent = o;
+      if (o === value) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener('change', () => {
+      localStorage.setItem(sk, sel.value);
+    });
+    cell.appendChild(sel);
+    row.appendChild(cell);
+  }
+  return row;
+}
+
+function buildPlainParam(p) {
+  // Plain (number/text/checkbox) param row — výtah z renderRuleUI pro reuse v mate UI.
+  const wrap = document.createElement('div');
+  wrap.className = 'param';
+  const lbl = document.createElement('label');
+  const span = document.createElement('span');
+  span.textContent = p.label;
+  lbl.appendChild(span);
+  const stored = localStorage.getItem(paramStorageKey(state.selectedRule, p.key));
+  const input = document.createElement('input');
+  if (p.type === 'checkbox') {
+    input.type = 'checkbox';
+    input.checked = stored !== null ? stored === 'true' : !!p.default;
+  } else {
+    input.type = p.type;
+    input.value = stored !== null ? stored : p.default;
+    if (p.placeholder) input.placeholder = p.placeholder;
+  }
+  input.dataset.key = p.key;
+  input.dataset.type = p.type;
+  const save = () => {
+    const v = p.type === 'checkbox' ? input.checked : input.value;
+    localStorage.setItem(paramStorageKey(state.selectedRule, p.key), String(v));
+  };
+  input.addEventListener('change', save);
+  input.addEventListener('input', save);
+  lbl.appendChild(input);
+  wrap.appendChild(lbl);
+  if (p.hint) {
+    const hint = document.createElement('div');
+    hint.className = 'param-hint';
+    hint.textContent = p.hint;
+    wrap.appendChild(hint);
+  }
+  return wrap;
+}
+
+function collectMateParams() {
+  const params = {};
+  // shared params (min_elo)
+  for (const input of document.querySelectorAll('#rule-params input')) {
+    const k = input.dataset.key;
+    if (!k) continue;
+    params[k] = input.dataset.type === 'number' ? Number(input.value) : input.value;
+  }
+  // mate_in
+  const mateInSel = document.querySelector('#rule-params select.mate-select');
+  params.mate_in = mateInSel ? parseInt(mateInSel.value) : 1;
+  // moves
+  params.moves = [];
+  for (let m = params.mate_in - 1; m >= 1; m--) {
+    const move = { move_from_mate: m };
+    for (const attr of MATE_ATTRS) {
+      const sel = document.querySelector(
+        `#rule-params select[data-mate-move="${m}"][data-mate-attr="${attr.key}"]`
+      );
+      move[attr.key] = sel ? sel.value : 'nezáleží';
+    }
+    params.moves.push(move);
+  }
+  return params;
+}
+
 function collectParams() {
+  if (state.selectedRule === 'mate') return collectMateParams();
   const params = {};
   for (const input of document.querySelectorAll('#rule-params input')) {
     const key = input.dataset.key;

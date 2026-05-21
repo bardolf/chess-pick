@@ -114,6 +114,61 @@ body.light .param-hint { color: #666; }
 body.light .fen-buttons button { background: #f0f0f0; color: #333; border-color: #ccc; }
 body.light .fen-buttons button:hover { background: #e0e0e0; }
 
+/* Rule 4 — Mate UI */
+.mate-row {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #2a2a2a;
+  border-radius: 4px;
+  border-left: 3px solid #4a90e2;
+}
+
+.mate-row-title {
+  font-weight: bold;
+  color: #ddd;
+  margin-bottom: 6px;
+  font-size: 0.95em;
+}
+
+.mate-row .mate-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 10px;
+  margin-bottom: 4px;
+  font-size: 0.85em;
+}
+
+.mate-row .mate-cell span {
+  color: #aaa;
+  margin-right: 2px;
+}
+
+.mate-row .mate-cell select {
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+select.mate-select {
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 0.95em;
+}
+
+/* light mode */
+body.light .mate-row { background: #f5f5f5; border-left-color: #2266cc; }
+body.light .mate-row-title { color: #222; }
+body.light .mate-row .mate-cell span { color: #555; }
+body.light .mate-row .mate-cell select,
+body.light select.mate-select { background: #fff; color: #222; border-color: #ccc; }
+
 body.light .board-nav button { background: #fff; color: #333; border-color: #ccc; }
 body.light .board-nav button:hover { background: #f0f0f0; }
 

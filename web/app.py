@@ -219,9 +219,16 @@ def analyze(req: AnalyzeRequest) -> StreamingResponse:
     elif req.rule in ("blunder", "zwischenzug"):
         limit = req.limit or 50
         gen = _stream_engine(pgn_path, req.rule, req.params, limit)
+    elif req.rule == "mate":
+        gen = _stream_not_implemented(req.rule)
     else:
         raise HTTPException(400, f"Neznámé pravidlo: {req.rule}")
     return StreamingResponse(gen, media_type="application/x-ndjson")
+
+
+def _stream_not_implemented(rule_name: str):
+    yield _emit({"type": "start", "rule": rule_name})
+    yield _emit({"type": "error", "message": f"Rule '{rule_name}' ještě není implementováno (UI je hotové, backend přijde dál)."})
 
 
 def _emit(obj: dict) -> str:
