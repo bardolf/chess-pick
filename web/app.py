@@ -191,6 +191,12 @@ class LichessImportRequest(BaseModel):
     pgn: str
 
 
+class ExportPgnRequest(BaseModel):
+    pgn: str                # název zdrojového PGN v twic/
+    rule: str | None = None # pro kontext do komentářů
+    matches: list[dict]     # data z `match` událostí (game_idx, ply, played, best, fullmove, side, ...)
+
+
 @app.post("/api/lichess-import")
 def lichess_import(req: LichessImportRequest) -> dict:
     """Server-side proxy na Lichess /api/import — obejde browser CORS."""
@@ -219,6 +225,89 @@ def lichess_import(req: LichessImportRequest) -> dict:
     except json.JSONDecodeError:
         raise HTTPException(502, f"Neplatná odpověď z Lichess: {body[:200]}")
     return {"url": game.get("url"), "id": game.get("id")}
+
+
+@app.post("/api/export-pgn")
+def export_pgn(req: ExportPgnRequest) -> Response:
+    """Vrátí původní PGN, ale jen partie kde byl nález, a u příslušných
+    tahů jsou doplněné komentáře typu '[chess-pick] blunder: best=Bxd4, played=Qe5'.
+    Pohodlné pro import zpět do ChessBase / Lichess studie."""
+    if not req.matches:
+        raise HTTPException(400, "Žádné nálezy k exportu.")
+
+    by_game: dict[int, list[dict]] = {}
+    for m in req.matches:
+        try:
+            gi = int(m["game_idx"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        by_game.setdefault(gi, []).append(m)
+
+    if not by_game:
+        raise HTTPException(400, "Žádné nálezy s platným game_idx.")
+
+    pgn_path = _pgn_path(req.pgn)
+    import io as _io
+    buf = _io.StringIO()
+    exporter = chess.pgn.FileExporter(buf, headers=True, variations=True, comments=True)
+
+    with open(pgn_path, encoding="utf-8") as f:
+        gi = -1
+        while True:
+            game = chess.pgn.read_game(f)
+            if game is None:
+                break
+            gi += 1
+            if gi not in by_game:
+                continue
+            _annotate_game(game, by_game[gi], req.rule)
+            game.accept(exporter)
+            buf.write("\n\n")
+
+    pgn_text = buf.getvalue()
+    base = req.pgn.rsplit(".", 1)[0] if "." in req.pgn else req.pgn
+    rule_tag = f"-{req.rule}" if req.rule else ""
+    filename = f"{base}{rule_tag}-marked.pgn"
+    return Response(
+        content=pgn_text,
+        media_type="application/x-chess-pgn",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _annotate_game(game: chess.pgn.Game, matches: list[dict], rule: str | None) -> None:
+    """Připíše ke správným uzlům v partii komentář chess-picku."""
+    nodes_by_ply: dict[int, chess.pgn.ChildNode | chess.pgn.Game] = {}
+    nodes_by_ply[0] = game
+    node = game
+    while node.variations:
+        node = node.variations[0]
+        nodes_by_ply[node.board().ply()] = node
+
+    for m in matches:
+        try:
+            ply = int(m.get("ply") or 0)
+        except (TypeError, ValueError):
+            continue
+        # blunder/zwischenzug: m.ply = pozice PŘED zahraným tahem → anotujeme tah (ply+1)
+        # mate / pawn_structure: m.ply je sama zajímavá pozice
+        target_ply = ply + 1 if rule in ("blunder", "zwischenzug") else ply
+        target = nodes_by_ply.get(target_ply) or nodes_by_ply.get(ply)
+        if target is None:
+            continue
+        parts = ["[chess-pick]"]
+        if rule:
+            parts.append(rule + ":")
+        played = m.get("played")
+        best = m.get("best")
+        if rule == "mate" and played:
+            parts.append(f"mate sequence: {played}")
+        elif played and best:
+            parts.append(f"best={best}, played={played}")
+        elif best:
+            parts.append(f"best={best}")
+        comment = " ".join(parts)
+        target.comment = (target.comment + " " if target.comment else "") + comment
 
 
 @app.post("/api/analyze")

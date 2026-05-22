@@ -253,6 +253,16 @@ function updateExportPdfButton() {
   } else {
     btn.title = `Stáhnout ${sel} z ${total} pozic jako PDF (jen zaškrtnuté)`;
   }
+
+  const pgnBtn = document.getElementById('btn-export-pgn');
+  if (pgnBtn) {
+    pgnBtn.disabled = sel === 0;
+    if (total === 0) {
+      pgnBtn.title = 'Po spuštění analýzy ti tu nabídnu PGN s vyznačenými momenty';
+    } else {
+      pgnBtn.title = `Stáhnout PGN ${sel} z ${total} partií s komentáři u nalezených tahů`;
+    }
+  }
 }
 
 function updateSelectAllButton() {
@@ -1057,6 +1067,51 @@ function downloadOutput() {
   URL.revokeObjectURL(url);
 }
 
+async function exportPgn() {
+  const items = selectedMatches();
+  if (items.length === 0) return;
+  if (!state.selectedPgn) {
+    alert('Zdrojový PGN soubor není známý — spusť analýzu znovu.');
+    return;
+  }
+  const btn = document.getElementById('btn-export-pgn');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ PGN';
+  try {
+    const r = await fetch('/api/export-pgn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pgn: state.selectedPgn,
+        rule: state.selectedRule,
+        matches: items,
+      }),
+    });
+    if (!r.ok) {
+      const errTxt = await r.text();
+      alert('Chyba při generování PGN: ' + errTxt);
+      return;
+    }
+    const blob = await r.blob();
+    const cd = r.headers.get('content-disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    const filename = m ? m[1] : 'chess-pick-marked.pgn';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Chyba: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+    updateExportPdfButton();
+  }
+}
+
 // -------- Wire up --------
 
 function setupEvents() {
@@ -1081,6 +1136,7 @@ function setupEvents() {
   document.getElementById('btn-download-output').addEventListener('click', downloadOutput);
   document.getElementById('open-in-lichess').addEventListener('click', openInLichess);
   document.getElementById('btn-export-pdf').addEventListener('click', exportPdf);
+  document.getElementById('btn-export-pgn').addEventListener('click', exportPgn);
   document.getElementById('btn-select-all').addEventListener('click', toggleSelectAll);
 
   // Keyboard shortcuts

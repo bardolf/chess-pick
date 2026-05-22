@@ -163,6 +163,17 @@ zahraný, podpis partie):
 
 ![PDF — řešení](doc/img/pdg_diagramy_reseni.png)
 
+### PGN export s vyznačenými nálezy
+
+Vedle PDF tlačítka je **♟ PGN** — stáhne PGN soubor obsahující jen partie
+kde byl nález, a u příslušných tahů má komentář typu
+`[chess-pick] blunder: best=Bxd4, played=Qe5` (resp. mate sekvenci pro Rule 4).
+Hodí se k načtení do **ChessBase**, **Lichess Study**, nebo libovolné PGN
+prohlížečky — pozice si pak můžeš dál komentovat / přidat varianty.
+
+Funguje pro všechna pravidla a respektuje výběr checkboxů (do PGN se
+dostanou jen zaškrtnuté nálezy).
+
 ### Theme
 
 🌓 v pravém horním rohu hlavičky přepíná **dark / light**. Volba se ukládá.
