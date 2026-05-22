@@ -263,12 +263,7 @@ def export_pgn(req: ExportPgnRequest) -> Response:
     if not source_games:
         raise HTTPException(404, "Nepodařilo se najít žádnou z partií podle game_idx.")
 
-    buf = _io.StringIO()
-    exporter = chess.pgn.FileExporter(buf, headers=True, variations=True, comments=True)
-    written = 0
-
-    # Každý nález = vlastní PGN záznam (samostatný `[Event]...` blok). Zachováváme
-    # pořadí, ve kterém přišly v UI.
+    chunks: list[str] = []
     for m in req.matches:
         try:
             gi = int(m["game_idx"])
@@ -277,17 +272,15 @@ def export_pgn(req: ExportPgnRequest) -> Response:
         src = source_games.get(gi)
         if src is None:
             continue
-        sub = _build_match_game(src, m, req.rule)
-        if sub is None:
+        chunk = _format_match_pgn(src, m, req.rule)
+        if chunk is None:
             continue
-        sub.accept(exporter)
-        buf.write("\n\n")
-        written += 1
+        chunks.append(chunk)
 
-    pgn_text = buf.getvalue()
-    if not pgn_text.strip():
+    if not chunks:
         raise HTTPException(404, "Žádný nález se nepodařilo převést na PGN záznam.")
-    print(f"[chess-pick] export-pgn: {written} zaznamu", flush=True)
+    pgn_text = "\n".join(chunks)
+    print(f"[chess-pick] export-pgn: {len(chunks)} zaznamu", flush=True)
     base = req.pgn.rsplit(".", 1)[0] if "." in req.pgn else req.pgn
     rule_tag = f"-{req.rule}" if req.rule else ""
     filename = f"{base}{rule_tag}-marked.pgn"
@@ -304,77 +297,108 @@ _HEADERS_TO_COPY = (
 )
 
 
-def _build_match_game(
+def _format_match_pgn(
     source: chess.pgn.Game,
     match: dict,
     rule: str | None,
-) -> chess.pgn.Game | None:
-    """Vytvoří samostatný PGN záznam z jednoho nálezu — pozice (FEN), `{[#]}`
-    diagram marker pro ChessBase a komentář s nejlepším / zahraným tahem.
+) -> str | None:
+    """Postaví samostatný PGN záznam pro jeden nález ve formátu, který ChessBase
+    importuje rovnou jako pozici/diagram:
+
+    ```
+    [Event "..."]
+    [Result "*"]
+    [SetUp "1"]
+    [FEN "...0 1"]
+    ...
+
+    {[#]} 1. e4 {[chess-pick] blunder: best=Bf4, played=e4} *
+    ```
+
+    Klíčové detaily:
+    - Fullmove counter ve FEN je resetovaný na 1, aby ChessBase číslo tahu
+      započítal od 1, ne od původní polohy v partii (např. 14. ...).
+    - `{[#]}` bez mezer uvnitř — ChessBase parser si toho jinak nemusí
+      všimnout a nezobrazí diagram.
     """
     fen = match.get("fen")
     if not fen:
         return None
+
+    parts = fen.split()
+    if len(parts) != 6:
+        return None
+    parts[4] = "0"   # halfmove clock
+    parts[5] = "1"   # fullmove counter — ChessBase pak číslo tahu začne na 1
+    fen_norm = " ".join(parts)
+
     try:
-        board = chess.Board(fen)
+        board = chess.Board(fen_norm)
     except ValueError:
         return None
 
-    new_game = chess.pgn.Game()
+    headers: list[tuple[str, str]] = []
     for k in _HEADERS_TO_COPY:
         if k in source.headers:
-            new_game.headers[k] = source.headers[k]
-    new_game.headers["Result"] = "*"
-    new_game.headers["FEN"] = fen
-    new_game.headers["SetUp"] = "1"
+            headers.append((k, source.headers[k]))
+    headers.append(("Result", "*"))
+    headers.append(("Annotator", "chess-pick"))
+    headers.append(("SetUp", "1"))
+    headers.append(("FEN", fen_norm))
     if rule:
-        new_game.headers["ChessPickRule"] = rule
-    # Pomocný kontext (číslo tahu) pro ChessBase
+        headers.append(("ChessPickRule", rule))
     fullmove = match.get("fullmove")
     if fullmove:
-        new_game.headers["ChessPickFullmove"] = str(fullmove)
+        headers.append(("ChessPickFullmove", str(fullmove)))
 
-    # Komentář o tom co engine říká
-    parts = ["[chess-pick]"]
+    # Komentář ve tvaru, který si uživatel přečte v ChessBase
+    comment_parts = ["[chess-pick]"]
     if rule:
-        parts.append(rule + ":")
+        comment_parts.append(rule + ":")
     played = match.get("played")
     best = match.get("best")
     if rule == "mate" and played:
-        parts.append(f"mate sequence: {played}")
+        comment_parts.append(f"mate sequence: {played}")
     elif played and best:
-        parts.append(f"best={best}, played={played}")
+        comment_parts.append(f"best={best}, played={played}")
     elif best:
-        parts.append(f"best={best}")
-    pick_comment = " ".join(parts)
+        comment_parts.append(f"best={best}")
+    pick_comment = " ".join(comment_parts)
 
-    # {[#]} = ChessBase diagram marker. Položíme ho jako prefix komentář k partii,
-    # aby ChessBase při importu pozici rovnou vyrenderoval jako diagram.
-    new_game.comment = "[#]"
-
-    moves_to_play: list[str] = []
+    moves: list[str] = []
     if rule == "mate" and played:
-        moves_to_play = played.split()  # celá matová sekvence
+        moves = played.split()
     elif rule in ("blunder", "zwischenzug") and played:
-        moves_to_play = [played]  # jen ten zahraný tah pro kontext
+        moves = [played]
 
-    last_node: chess.pgn.GameNode = new_game
-    for san in moves_to_play:
+    move_text = ""
+    move_num = board.fullmove_number  # po normalizaci FEN by mělo být 1
+    black_to_move = (board.turn == chess.BLACK)
+    rendered = 0
+    for san in moves:
         try:
             mv = board.parse_san(san)
+            san_norm = board.san(mv)
         except (ValueError, chess.IllegalMoveError):
             break
-        last_node = last_node.add_main_variation(mv)
+        if not black_to_move:
+            move_text += f"{move_num}. "
+        elif rendered == 0:
+            move_text += f"{move_num}... "
+        move_text += san_norm + " "
         board.push(mv)
+        if black_to_move:
+            move_num += 1
+        black_to_move = not black_to_move
+        rendered += 1
 
-    if last_node is new_game:
-        # Žádný tah nepřidán (pawn_structure nebo parse fail) — komentář přiložíme
-        # vedle diagram markeru.
-        new_game.comment = f"[#] {pick_comment}"
+    if move_text:
+        body = f"{{[#]}} {move_text.strip()} {{{pick_comment}}} *"
     else:
-        last_node.comment = pick_comment
+        body = f"{{[#]}} {{{pick_comment}}} *"
 
-    return new_game
+    header_lines = "\n".join(f'[{k} "{v}"]' for k, v in headers)
+    return header_lines + "\n\n" + body + "\n\n"
 
 
 @app.post("/api/analyze")
