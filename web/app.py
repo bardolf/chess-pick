@@ -378,7 +378,9 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int, eng
                     depth=depth,
                     multipv=multipv,
                     limit=limit,
-                    max_per_game=1,
+                    # Blunder/Zwischenzug: chceme všechny zajímavé momenty z partie,
+                    # ne jen první. Limit počtu výsledků řeší `limit` celkově.
+                    max_per_game=None,
                     verbose=False,
                 ):
                     try:
