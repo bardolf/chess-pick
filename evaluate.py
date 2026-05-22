@@ -17,7 +17,16 @@ def _resolve_stockfish_path() -> Path:
     """
     env = os.environ.get("STOCKFISH_PATH")
     if env:
-        return Path(env)
+        env_path = Path(env)
+        if env_path.is_file():
+            return env_path
+        # env proměnná ukazuje na neexistující soubor — varuj a zkus auto-detekci
+        import sys as _sys
+        print(
+            f"[evaluate] WARN: STOCKFISH_PATH={env!r} nesedí — soubor neexistuje. "
+            f"Zkouším auto-detekci v kořeni projektu.",
+            file=_sys.stderr, flush=True,
+        )
 
     project_root = Path(__file__).resolve().parent
 

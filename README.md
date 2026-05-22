@@ -48,14 +48,19 @@ python -m venv .venv
 Stáhni `stockfish-windows-x86-64-avx2.zip` z [stockfishchess.org/download](https://stockfishchess.org/download/),
 rozbal a buď:
 
-- **A)** přejmenuj `.exe` na `stockfish.exe` a hoď ho do kořene projektu `chess-pick/`, **nebo**
-- **B)** nastav env proměnnou (jen v aktuální session):
+- **A) (Doporučeno)** přejmenuj `.exe` na `stockfish.exe` a hoď ho přímo do kořene
+  projektu `chess-pick\` vedle `main.py`. Aplikace ho najde sama.
+
+- **B)** Pokud chceš nechat exe jinde, nastav env proměnnou na **skutečnou cestu
+  k tvému exe** (ne tento příklad doslova!):
 
   ```powershell
-  $env:STOCKFISH_PATH = "C:\Path\To\stockfish.exe"
+  # nahraď path skutečnou cestou na tvém disku
+  $env:STOCKFISH_PATH = "D:\engines\stockfish-windows-x86-64-avx2.exe"
   ```
 
-  Pro trvalé nastavení použij *System Properties → Environment Variables*.
+  `$env:` v PowerShellu platí **jen v aktuálním okně**. Pro trvalé nastavení
+  použij *System Properties → Environment Variables*.
 
 ### PGN soubory
 
