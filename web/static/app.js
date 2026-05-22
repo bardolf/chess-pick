@@ -1119,13 +1119,9 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchPgns();
 });
 
-const PIECE_EFFECTS = {
-  king:   { colors: ['#ffd700', '#ffaa00', '#ffe060', '#fff080'],            count: 14, distance: 55, blur: 1, size: [8, 16]  },
-  queen:  { colors: ['#ff80ff', '#ffaaff', '#80ffff', '#ffff80', '#ffd0ff'], count: 20, distance: 65, blur: 1, size: [6, 12]  },
-  rook:   { colors: ['#aaa', '#888', '#bbb', '#666'],                        count: 12, distance: 38, blur: 3, size: [12, 22] },
-  bishop: { colors: ['#a0e0ff', '#ffffff', '#80c0ff', '#d0f0ff'],            count: 14, distance: 60, blur: 1, size: [8, 14]  },
-  knight: { colors: ['#ffe060', '#ff8030', '#ff4020', '#ff2010', '#c00000'], count: 16, distance: 70, blur: 2, size: [14, 24] },
-  pawn:   { colors: ['#cceaff', '#ffffff', '#a0d8f0', '#e8f5ff'],            count: 14, distance: 42, blur: 1, size: [5, 10]  },
+const KNIGHT_FX = {
+  colors: ['#ffe060', '#ff8030', '#ff4020', '#ff2010', '#c00000'],
+  count: 16, distance: 70, blur: 2, size: [14, 24],
 };
 
 const FILES = ['a','b','c','d','e','f','g','h'];
@@ -1133,182 +1129,30 @@ function randomSquare() {
   return FILES[Math.floor(Math.random() * 8)] + (Math.floor(Math.random() * 8) + 1);
 }
 
-// Šachovnice — geometrie a generátory legálních tahů (bez ohledu na figurky navzájem)
-const BOARD_COLS = 8;
-const BOARD_ROWS = 8;
-
-const DIRS_8       = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-const DIRS_HV      = [[-1,0],[1,0],[0,-1],[0,1]];
-const DIRS_DIAG    = [[-1,-1],[-1,1],[1,-1],[1,1]];
-const KNIGHT_JUMPS = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
-
-function inBounds(c, r) {
-  return c >= 0 && c < BOARD_COLS && r >= 0 && r < BOARD_ROWS;
-}
-
-function rayTargets(c, r, dirs, isBlocked) {
-  const out = [];
-  dirs.forEach(([dc, dr]) => {
-    for (let n = 1; n < Math.max(BOARD_COLS, BOARD_ROWS); n++) {
-      const nc = c + dc * n, nr = r + dr * n;
-      if (!inBounds(nc, nr)) break;
-      if (isBlocked(nc, nr)) break; // narazila na cizí figurku — dál nesmí
-      out.push([nc, nr]);
-    }
-  });
-  return out;
-}
-
-const MOVE_GENERATORS = {
-  king:   (c, r, blk) => DIRS_8.map(([dc,dr]) => [c+dc, r+dr]).filter(([nc,nr]) => inBounds(nc, nr) && !blk(nc, nr)),
-  queen:  (c, r, blk) => rayTargets(c, r, DIRS_8, blk),
-  rook:   (c, r, blk) => rayTargets(c, r, DIRS_HV, blk),
-  bishop: (c, r, blk) => rayTargets(c, r, DIRS_DIAG, blk),
-  knight: (c, r, blk) => KNIGHT_JUMPS.map(([dc,dr]) => [c+dc, r+dr]).filter(([nc,nr]) => inBounds(nc, nr) && !blk(nc, nr)),
-};
-
-const INITIAL_POSITIONS = {
-  king:   [1, 3],
-  queen:  [5, 5],
-  rook:   [7, 1],
-  bishop: [3, 4],
-  knight: [6, 6],
-  pawn:   [4, 0],
-};
-
-const piecePositions = new Map();
-let pawnDx = -1; // pěšec startuje doleva
-
 function setupPiecesAnimations() {
-  const arena = document.querySelector('.chess-arena');
-  if (arena && !arena.querySelector('.chess-cell')) {
-    const frag = document.createDocumentFragment();
-    for (let r = 0; r < BOARD_ROWS; r++) {
-      for (let c = 0; c < BOARD_COLS; c++) {
-        const cell = document.createElement('div');
-        cell.className = 'chess-cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
-        frag.appendChild(cell);
-      }
+  const knight = document.querySelector('.header-knight');
+  if (!knight) return;
+
+  knight.addEventListener('click', () => {
+    knight.classList.remove('active');
+    void knight.offsetWidth;
+    knight.classList.add('active');
+    setTimeout(() => knight.classList.remove('active'), 1200);
+
+    const bubble = knight.querySelector('.piece-bubble');
+    if (bubble) {
+      bubble.textContent = randomSquare() + '!';
+      bubble.classList.remove('show');
+      void bubble.offsetWidth;
+      bubble.classList.add('show');
     }
-    arena.insertBefore(frag, arena.firstChild);
-  }
 
-  document.querySelectorAll('.piece-cell').forEach(cell => {
-    const type = cell.dataset.piece;
-    const [c, r] = INITIAL_POSITIONS[type] || [0, 0];
-    setPiecePosition(cell, c, r);
-
-    cell.addEventListener('click', () => {
-      if (!PIECE_EFFECTS[type]) return;
-
-      cell.classList.remove('active');
-      void cell.offsetWidth;
-      cell.classList.add('active');
-      setTimeout(() => cell.classList.remove('active'), 1200);
-
-      const bubble = cell.querySelector('.piece-bubble');
-      if (bubble) {
-        bubble.textContent = randomSquare() + '!';
-        bubble.classList.remove('show');
-        void bubble.offsetWidth;
-        bubble.classList.add('show');
-      }
-
-      spawnPieceParticles(cell, type);
-    });
-
-    if (MOVE_GENERATORS[type]) {
-      scheduleNextMove(cell);
-    } else if (type === 'pawn') {
-      scheduleNextPawnMove(cell);
-    }
+    spawnKnightParticles(knight);
   });
 }
 
-function scheduleNextPawnMove(cell) {
-  const delay = 2400 + Math.random() * 2400;
-  setTimeout(() => {
-    pawnTurn(cell);
-    scheduleNextPawnMove(cell);
-  }, delay);
-}
-
-function pawnTurn(cell) {
-  const [c, r] = piecePositions.get(cell);
-  const newC = c + pawnDx;
-
-  // Sjel z desky — promotion fail, "!?" a teleport do levého horního rohu
-  if (newC < 0 || newC >= BOARD_COLS) {
-    pawnFreakout(cell);
-    pawnDx = 1; // další směr "rovně" je teď doprava
-    return;
-  }
-
-  // Blokuje jiná figurka? Tento tah přeskočíme, ale směr nehází
-  for (const [other, pos] of piecePositions) {
-    if (other !== cell && pos[0] === newC && pos[1] === r) return;
-  }
-
-  setPiecePosition(cell, newC, r);
-}
-
-function pawnFreakout(cell) {
-  const bubble = cell.querySelector('.piece-bubble');
-  if (bubble) {
-    bubble.textContent = '!?';
-    bubble.classList.remove('show');
-    void bubble.offsetWidth;
-    bubble.classList.add('show');
-  }
-  spawnPieceParticles(cell, 'pawn');
-
-  // Třes (jako klik)
-  cell.classList.remove('active');
-  void cell.offsetWidth;
-  cell.classList.add('active');
-  setTimeout(() => cell.classList.remove('active'), 1100);
-
-  // Teleport bez animace na (0, 0) — disable transition na jeden frame
-  setTimeout(() => {
-    cell.style.transition = 'none';
-    setPiecePosition(cell, 0, 0);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => { cell.style.transition = ''; });
-    });
-  }, 380);
-}
-
-function setPiecePosition(cell, c, r) {
-  cell.style.setProperty('--col', c);
-  cell.style.setProperty('--row', r);
-  piecePositions.set(cell, [c, r]);
-}
-
-function scheduleNextMove(cell) {
-  const delay = 2200 + Math.random() * 2600;
-  setTimeout(() => {
-    const type = cell.dataset.piece;
-    const gen = MOVE_GENERATORS[type];
-    if (!gen) return;
-    const [c, r] = piecePositions.get(cell);
-
-    const occupied = new Set();
-    for (const [other, pos] of piecePositions) {
-      if (other !== cell) occupied.add(pos[0] + ',' + pos[1]);
-    }
-    const isBlocked = (nc, nr) => occupied.has(nc + ',' + nr);
-
-    const targets = gen(c, r, isBlocked);
-    if (targets.length > 0) {
-      const [nc, nr] = targets[Math.floor(Math.random() * targets.length)];
-      setPiecePosition(cell, nc, nr);
-    }
-    scheduleNextMove(cell);
-  }, delay);
-}
-
-function spawnPieceParticles(cell, pieceType) {
-  const cfg = PIECE_EFFECTS[pieceType];
+function spawnKnightParticles(host) {
+  const cfg = KNIGHT_FX;
   const [sMin, sMax] = cfg.size;
   for (let i = 0; i < cfg.count; i++) {
     const p = document.createElement('div');
@@ -1325,7 +1169,7 @@ function spawnPieceParticles(cell, pieceType) {
     p.style.height = size + 'px';
     p.style.background = `radial-gradient(circle, ${color} 0%, transparent 70%)`;
     p.style.filter = `blur(${cfg.blur}px)`;
-    cell.appendChild(p);
+    host.appendChild(p);
     setTimeout(() => p.remove(), duration * 1000 + 100);
   }
 }
