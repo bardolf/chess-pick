@@ -195,7 +195,7 @@ Naimportuj do **ChessBase** a dostaneš N samostatných pozic v databázi, každ
 s diagramem a poznámkou. Funguje pro všechna pravidla a respektuje výběr
 checkboxů (do PGN jdou jen zaškrtnuté nálezy).
 
-![PGN — ukázka záznamu](doc/img/pgn_ukazka.png)
+![Záznam otevřený v ChessBase](doc/img/chessbase.png)
 
 ### Theme
 
