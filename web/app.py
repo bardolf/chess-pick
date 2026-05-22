@@ -40,6 +40,10 @@ from pydantic import BaseModel
 
 from cache import EvalCache
 from evaluate import STOCKFISH_PATH
+
+print(f"[chess-pick] STOCKFISH_PATH = {STOCKFISH_PATH!r}", flush=True)
+print(f"[chess-pick]   exists()    = {STOCKFISH_PATH.exists()}", flush=True)
+print(f"[chess-pick]   is_file()   = {STOCKFISH_PATH.is_file()}", flush=True)
 from filters import (
     MinElo,
     OpeningPositionMatches,
@@ -350,8 +354,10 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int):
             yield game
 
     matches_found = 0
+    sf_path = str(STOCKFISH_PATH)
+    print(f"[chess-pick] Spouštím Stockfish: {sf_path!r}", flush=True)
     try:
-        with chess.engine.SimpleEngine.popen_uci(str(STOCKFISH_PATH)) as engine:
+        with chess.engine.SimpleEngine.popen_uci(sf_path) as engine:
             engine.configure({"Threads": STOCKFISH_THREADS, "Hash": STOCKFISH_HASH_MB})
             with EvalCache(EVAL_DB, engine) as cache:
                 for ctx in find_positions(
