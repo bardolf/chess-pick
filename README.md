@@ -82,6 +82,11 @@ v UI (prostřední sloupec nahoře) — soubor se uloží automaticky.
 
 ## Spuštění
 
+Nejjednodušší — dvojklik na **`start.bat`** v kořeni projektu (nebo
+`./start.sh` na Linuxu/macOS). Otevře se konzole s logem.
+
+Manuálně:
+
 ```powershell
 .venv\Scripts\uvicorn web.app:app --host 127.0.0.1 --port 8000
 ```
@@ -189,7 +194,7 @@ python -m venv .venv
 sudo apt install stockfish
 export STOCKFISH_PATH=/usr/games/stockfish
 
-.venv/bin/uvicorn web.app:app --host 127.0.0.1 --port 8000
+./start.sh                 # nebo: .venv/bin/uvicorn web.app:app --host 127.0.0.1 --port 8000
 ```
 
 ## Vývojové info
