@@ -20,9 +20,26 @@ header {
 header h1 {
   margin: 0;
   font-size: 2.3em;
-  color: #fff;
   letter-spacing: 0.5px;
   font-weight: 700;
+}
+
+header h1 a {
+  color: #fff;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+header h1 a:hover {
+  color: #7ab5ff;
+  text-decoration: underline;
+}
+
+body.light header h1 a {
+  color: #222;
+}
+body.light header h1 a:hover {
+  color: #2266cc;
 }
 
 .subtitle {
@@ -72,7 +89,6 @@ body.light header {
   border-bottom-color: #ddd;
 }
 
-body.light header h1 { color: #222; }
 body.light .subtitle { color: #555; border-left-color: #2266cc; }
 body.light .author { color: #444; }
 body.light .theme-toggle { color: #333; border-color: #ccc; }

@@ -176,6 +176,8 @@ zahraný, podpis partie):
   ```powershell
   sqlite3 eval_cache.db "DELETE FROM seen_candidates;"
   ```
+- Klikni na nadpis **„Chess-Pick"** vlevo nahoře — odkaz vede sem na GitHub
+  README, kdyby ses ztratil v ovládání
 - Klikni na **modrého jezdce** v hlavičce ¯\\\_(ツ)\_/¯
 
 ---
