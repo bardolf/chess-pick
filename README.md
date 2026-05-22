@@ -181,16 +181,21 @@ zahraný, podpis partie):
 
 ### PGN export s vyznačenými nálezy
 
-Vedle PDF tlačítka je **♟ PGN** — stáhne PGN soubor obsahující jen partie
-kde byl nález, a u příslušných tahů má komentář typu
-`[chess-pick] blunder: best=Bxd4, played=Qe5` (resp. mate sekvenci pro Rule 4).
-Hodí se k načtení do **ChessBase**, **Lichess Study**, nebo libovolné PGN
-prohlížečky — pozice si pak můžeš dál komentovat / přidat varianty.
+Vedle PDF tlačítka je **♟ PGN** — stáhne PGN soubor, kde **každý nález je
+samostatný záznam** (i když jich pochází víc z jedné partie):
 
-Funguje pro všechna pravidla a respektuje výběr checkboxů (do PGN se
-dostanou jen zaškrtnuté nálezy).
+- hlavičky [Event], [White], [Black], [Date], … zkopírované ze zdrojové partie
+- [FEN] + [SetUp "1"] = pozice odpovídající momentu
+- komentář `{ [#] }` = **diagram marker pro ChessBase** (po importu se pozice
+  rovnou zobrazí jako diagram)
+- jeden tah (zahraný blunder / první tah matové sekvence) + chess-pick komentář
+  typu `{ best=Bxd4, played=Qe5 }` (resp. plná matová sekvence pro Rule 4)
 
-![PGN — ukázka anotovaného tahu](doc/img/pgn_ukazka.png)
+Naimportuj do **ChessBase** a dostaneš N samostatných pozic v databázi, každou
+s diagramem a poznámkou. Funguje pro všechna pravidla a respektuje výběr
+checkboxů (do PGN jdou jen zaškrtnuté nálezy).
+
+![PGN — ukázka záznamu](doc/img/pgn_ukazka.png)
 
 ### Theme
 
