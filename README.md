@@ -140,6 +140,22 @@ tah mata zvlášť — typ (šach / braní / promotion) a hodnotu (ano / ne / ne
 
 ![Konfigurace mate-in-N](doc/img/rule-mate.png)
 
+### Parametry enginu (Stockfish)
+
+Pod parametry pravidla je v pravém sloupci panel **„Parametry enginu (Stockfish)"**.
+Dvě globální nastavení nezávislá na pravidle (uloží se do localStorage):
+
+- **Threads** — počet vláken Stockfishe. `1` = nejmenší zátěž stroje (engine
+  jede prakticky na pozadí), vyšší = rychlejší analýza za cenu vytížení CPU
+- **Hash (MB)** — velikost transposition table v paměti. `1024` = 1 GB.
+  Větší obvykle = rychlejší (engine si pamatuje víc pozic), nedávej ale
+  víc než máš volné RAM
+
+Hodnoty se posílají s každým ▶ Analyze a aplikují přes UCI `setoption` —
+neovlivňují Rule 3 (struktura), kde se Stockfish vůbec nespouští.
+
+![Parametry enginu](doc/img/parametry_enginu.png)
+
 ### Výsledek analýzy
 
 Po stisku ▶ Analyze běží stream pozic v levém sloupci. ■ Stop přeruší.
@@ -173,6 +189,8 @@ prohlížečky — pozice si pak můžeš dál komentovat / přidat varianty.
 
 Funguje pro všechna pravidla a respektuje výběr checkboxů (do PGN se
 dostanou jen zaškrtnuté nálezy).
+
+![PGN — ukázka anotovaného tahu](doc/img/pgn_ukazka.png)
 
 ### Theme
 
