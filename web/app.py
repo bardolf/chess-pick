@@ -14,8 +14,14 @@ Spuštění:
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
+
+# Na Windows si vynutíme ProactorEventLoop policy — bez toho asyncio.subprocess
+# (který používá python-chess pro spuštění Stockfishe) na Pythonu 3.14 padá.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))

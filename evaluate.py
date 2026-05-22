@@ -10,23 +10,43 @@ import chess.engine
 def _resolve_stockfish_path() -> Path:
     """Cesta ke Stockfish binárce. Priorita:
     1. env proměnná STOCKFISH_PATH
-    2. cesta ./stockfish (relativně k projektu) nebo ./stockfish.exe na Windows
-    3. linuxový default na vývojářském stroji
+    2. ./stockfish[.exe] v kořeni projektu (přesný název)
+    3. ./stockfish*[.exe] v kořeni nebo bezprostřední podsložce
+       (chytí např. stockfish-windows-x86-64-avx2.exe)
+    4. linuxový default na vývojářském stroji
     """
     env = os.environ.get("STOCKFISH_PATH")
     if env:
         return Path(env)
 
     project_root = Path(__file__).resolve().parent
-    candidates = [
-        project_root / "stockfish.exe",
-        project_root / "stockfish",
-        Path("/home/milan/opt/stockfish/stockfish-ubuntu-x86-64-avx2"),
+
+    # 1) přesný název
+    for name in ("stockfish.exe", "stockfish"):
+        p = project_root / name
+        if p.is_file():
+            return p
+
+    # 2) glob na varianty (stockfish-windows-x86-64-avx2.exe apod.),
+    #    v rootu i v jedné úrovni podsložek
+    patterns = [
+        "stockfish*.exe",
+        "stockfish*/stockfish*.exe",
+        "stockfish-*",
+        "stockfish*/stockfish-*",
     ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return candidates[-1]  # fallback (i kdyby neexistovala, chess.engine pak vrátí chybu)
+    for pat in patterns:
+        for p in sorted(project_root.glob(pat)):
+            if p.is_file():
+                return p
+
+    # 3) linuxový dev default
+    linux_default = Path("/home/milan/opt/stockfish/stockfish-ubuntu-x86-64-avx2")
+    if linux_default.is_file():
+        return linux_default
+
+    # fallback — engine.popen_uci pak vrátí čitelnější chybu než my zde
+    return project_root / "stockfish.exe"
 
 
 STOCKFISH_PATH = _resolve_stockfish_path()
