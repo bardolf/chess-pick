@@ -183,6 +183,7 @@ class AnalyzeRequest(BaseModel):
     rule: str
     pgn: str
     params: dict = {}
+    engine: dict = {}  # threads, hash (MB), případně další UCI parametry
     limit: int | None = None  # max kandidátů (None = default per mód)
 
 
@@ -228,7 +229,7 @@ def analyze(req: AnalyzeRequest) -> StreamingResponse:
         gen = _stream_pawn_structure(pgn_path, req.params, limit)
     elif req.rule in ("blunder", "zwischenzug"):
         limit = req.limit or 50
-        gen = _stream_engine(pgn_path, req.rule, req.params, limit)
+        gen = _stream_engine(pgn_path, req.rule, req.params, limit, req.engine)
     elif req.rule == "mate":
         limit = req.limit or 100
         gen = _stream_mate(pgn_path, req.params, limit)
@@ -326,7 +327,7 @@ def _stream_pawn_structure(pgn_path: Path, params: dict, limit: int):
     yield _emit({"type": "done", "games_scanned": games_scanned, "matches_total": matches_found})
 
 
-def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int):
+def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int, engine_opts: dict | None = None):
     depth = int(params.get("depth", DEFAULT_DEPTH))
     multipv = int(params.get("multipv", DEFAULT_MULTIPV))
     if rule_name == "blunder":
@@ -355,10 +356,19 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int):
 
     matches_found = 0
     sf_path = str(STOCKFISH_PATH)
-    print(f"[chess-pick] Spouštím Stockfish: {sf_path!r}", flush=True)
+    eopt = engine_opts or {}
+    try:
+        threads = max(1, int(eopt.get("threads", STOCKFISH_THREADS)))
+    except (TypeError, ValueError):
+        threads = STOCKFISH_THREADS
+    try:
+        hash_mb = max(1, int(eopt.get("hash", STOCKFISH_HASH_MB)))
+    except (TypeError, ValueError):
+        hash_mb = STOCKFISH_HASH_MB
+    print(f"[chess-pick] Spouštím Stockfish: {sf_path!r} (Threads={threads}, Hash={hash_mb}MB)", flush=True)
     try:
         with chess.engine.SimpleEngine.popen_uci(sf_path) as engine:
-            engine.configure({"Threads": STOCKFISH_THREADS, "Hash": STOCKFISH_HASH_MB})
+            engine.configure({"Threads": threads, "Hash": hash_mb})
             with EvalCache(EVAL_DB, engine) as cache:
                 for ctx in find_positions(
                     games_with_index(),

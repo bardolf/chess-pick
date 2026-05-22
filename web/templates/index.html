@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>chess-pick</title>
   <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
-  <link rel="stylesheet" href="/static/style.css?v=39" />
+  <link rel="stylesheet" href="/static/style.css?v=42" />
 </head>
 <body>
   <header>
@@ -120,6 +120,26 @@
         <div id="rule-params"></div>
       </div>
 
+      <div class="panel">
+        <div class="panel-title">Parametry enginu (Stockfish)</div>
+        <div id="engine-params">
+          <div class="param">
+            <label>
+              <span>Threads</span>
+              <input type="number" id="engine-threads" min="1" max="64" value="2" />
+            </label>
+            <div class="param-hint">Počet CPU vláken Stockfishe. 1 = nejmenší zátěž stroje, vyšší = rychlejší analýza, ale vytíží jádra.</div>
+          </div>
+          <div class="param">
+            <label>
+              <span>Hash (MB)</span>
+              <input type="number" id="engine-hash" min="16" max="8192" step="16" value="1024" />
+            </label>
+            <div class="param-hint">Velikost transposition table v RAM. 1024 = 1 GB. Větší = obvykle rychlejší (nepřesáhni volnou RAM).</div>
+          </div>
+        </div>
+      </div>
+
       <div class="analyze-section">
         <button id="btn-analyze">▶ Analyze</button>
         <button id="btn-stop" disabled>■ Stop</button>
@@ -132,6 +152,6 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
   <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-  <script src="/static/app.js?v=39"></script>
+  <script src="/static/app.js?v=42"></script>
 </body>
 </html>

@@ -498,6 +498,7 @@ async function runAnalyze() {
         rule: state.selectedRule,
         pgn: state.selectedPgn,
         params,
+        engine: collectEngineParams(),
       }),
       signal: currentAbortController.signal,
     });
@@ -1113,11 +1114,39 @@ document.addEventListener('DOMContentLoaded', () => {
   initBoard();
   setupEvents();
   setupPiecesAnimations();
+  setupEngineParams();
   document.getElementById('rule-select').value = state.selectedRule;
   renderRuleUI();
   updateExportPdfButton();
   fetchPgns();
 });
+
+const ENGINE_PARAM_FIELDS = [
+  { id: 'engine-threads', key: 'threads', def: 2 },
+  { id: 'engine-hash',    key: 'hash',    def: 1024 },
+];
+
+function setupEngineParams() {
+  ENGINE_PARAM_FIELDS.forEach(f => {
+    const el = document.getElementById(f.id);
+    if (!el) return;
+    const stored = localStorage.getItem(`chess-pick:engine:${f.key}`);
+    if (stored !== null) el.value = stored;
+    el.addEventListener('change', () => {
+      localStorage.setItem(`chess-pick:engine:${f.key}`, el.value);
+    });
+  });
+}
+
+function collectEngineParams() {
+  const out = {};
+  ENGINE_PARAM_FIELDS.forEach(f => {
+    const el = document.getElementById(f.id);
+    const n = Number(el && el.value);
+    out[f.key] = Number.isFinite(n) && n > 0 ? n : f.def;
+  });
+  return out;
+}
 
 const KNIGHT_FX = {
   colors: ['#ffe060', '#ff8030', '#ff4020', '#ff2010', '#c00000'],

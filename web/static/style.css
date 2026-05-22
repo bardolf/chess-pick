@@ -215,18 +215,22 @@ main.three-col {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 }
 
 .col.left {
   align-items: stretch;
 }
 
-/* Chessboard */
+/* Chessboard — defaultně menší ať se FEN/output vejde i na laptop monitor.
+   Pro větší zobrazení uživatel může roztáhnout dělítko mezi sloupci. */
 .board {
   width: 100%;
-  max-width: 760px;
+  max-width: min(520px, 45vh);
   align-self: center;
+  flex: 0 0 auto;
 }
 
 .board-nav {
@@ -468,7 +472,8 @@ body.light #open-in-lichess:hover { background: #3377dd; }
   line-height: 1.5;
 }
 
-#rule-params {
+#rule-params,
+#engine-params {
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
