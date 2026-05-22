@@ -235,16 +235,53 @@ async function uploadPgn(file) {
 let currentAbortController = null;
 let currentMatches = [];
 
+function selectedMatches() {
+  return currentMatches.filter(m => m.selected !== false);
+}
+
 function updateExportPdfButton() {
   const btn = document.getElementById('btn-export-pdf');
   if (!btn) return;
   const allowed = ['blunder', 'zwischenzug', 'mate'].includes(state.selectedRule);
-  btn.disabled = !(allowed && currentMatches.length > 0);
-  btn.title = allowed
-    ? (currentMatches.length > 0
-        ? `Stáhnout ${currentMatches.length} pozic jako PDF (client-side)`
-        : 'Po spuštění analýzy ti tu nabídnu PDF s diagramy')
-    : 'PDF export není pro toto pravidlo k dispozici (jen rule 1, 2, 4)';
+  const total = currentMatches.length;
+  const sel = selectedMatches().length;
+  btn.disabled = !(allowed && sel > 0);
+  if (!allowed) {
+    btn.title = 'PDF export není pro toto pravidlo k dispozici (jen rule 1, 2, 4)';
+  } else if (total === 0) {
+    btn.title = 'Po spuštění analýzy ti tu nabídnu PDF s diagramy';
+  } else {
+    btn.title = `Stáhnout ${sel} z ${total} pozic jako PDF (jen zaškrtnuté)`;
+  }
+}
+
+function updateSelectAllButton() {
+  const btn = document.getElementById('btn-select-all');
+  if (!btn) return;
+  const total = currentMatches.length;
+  const sel = selectedMatches().length;
+  if (total === 0) {
+    btn.disabled = true;
+    btn.textContent = '✓ Vybrat vše';
+    btn.title = 'Po spuštění analýzy lze hromadně zaškrtnout / odznačit nálezy pro PDF';
+    return;
+  }
+  btn.disabled = false;
+  const allOn = sel === total;
+  btn.textContent = allOn ? '☐ Odznačit vše' : '✓ Vybrat vše';
+  btn.title = allOn ? 'Odznačit všechny pro PDF' : 'Vybrat všechny pro PDF';
+}
+
+function toggleSelectAll() {
+  if (currentMatches.length === 0) return;
+  const allOn = selectedMatches().length === currentMatches.length;
+  const newState = !allOn;
+  currentMatches.forEach(m => { m.selected = newState; });
+  document.querySelectorAll('.result-item-checkbox').forEach(cb => {
+    cb.checked = newState;
+  });
+  updateSelectAllButton();
+  updateExportPdfButton();
 }
 
 // ---- Client-side PDF generation pomocí jsPDF ----
@@ -328,7 +365,8 @@ function drawBoardOnPdf(pdf, fen, x, y, size) {
 }
 
 async function exportPdf() {
-  if (currentMatches.length === 0) return;
+  const items = selectedMatches();
+  if (items.length === 0) return;
   if (!['blunder', 'zwischenzug', 'mate'].includes(state.selectedRule)) {
     alert('PDF export není pro toto pravidlo k dispozici (jen Rule 1 — Blunder, Rule 2 — Zwischenzug a Rule 4 — Mate).');
     return;
@@ -348,8 +386,8 @@ async function exportPdf() {
     const CELL_H = (PAGE_H - MARGIN_TOP - MARGIN_BOTTOM) / ROWS;
     const BOARD_SIZE = Math.min(CELL_W, CELL_H) * 0.85;
 
-    for (let i = 0; i < currentMatches.length; i++) {
-      const m = currentMatches[i];
+    for (let i = 0; i < items.length; i++) {
+      const m = items[i];
       const slot = i % PER_PAGE;
       if (slot === 0 && i > 0) pdf.addPage();
       if (slot === 0) {
@@ -422,8 +460,8 @@ async function exportPdf() {
     pdf.setFont('helvetica', 'normal');
     let sy = MARGIN_TOP + 10;
     const lineH = 5.5;
-    for (let i = 0; i < currentMatches.length; i++) {
-      const m = currentMatches[i];
+    for (let i = 0; i < items.length; i++) {
+      const m = items[i];
       if (sy > PAGE_H - MARGIN_BOTTOM - 10) {
         pdf.addPage();
         pdf.setFontSize(14);
@@ -487,6 +525,7 @@ async function runAnalyze() {
   currentAbortController = new AbortController();
   currentMatches = [];
   updateExportPdfButton();
+  updateSelectAllButton();
   let matchCount = 0;
   const startTime = Date.now();
 
@@ -552,8 +591,10 @@ function handleStreamMessage(msg, matchCount) {
     if (h) h.textContent = `Pravidlo: progress · ${msg.games_scanned} partií, ${msg.matches_found} nálezů`;
   } else if (msg.type === 'match') {
     matchCount++;
+    msg.data.selected = true;
     currentMatches.push(msg.data);
     updateExportPdfButton();
+    updateSelectAllButton();
     const item = renderMatchItem(matchCount, msg.data);
     out.appendChild(item);
     if (h) h.textContent = `Pravidlo: běží · ${matchCount} nálezů`;
@@ -573,18 +614,34 @@ function renderMatchItem(idx, m) {
   item.className = 'result-item';
   item.dataset.gameIdx = m.game_idx ?? -1;
   item.dataset.ply = m.ply ?? 0;
-  item.title = 'Klikni pro načtení partie a skok na tuto pozici';
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'result-item-checkbox';
+  cb.checked = m.selected !== false;
+  cb.title = 'Zahrnout do PDF';
+  cb.addEventListener('click', (e) => e.stopPropagation());
+  cb.addEventListener('change', () => {
+    m.selected = cb.checked;
+    updateSelectAllButton();
+    updateExportPdfButton();
+  });
+  item.appendChild(cb);
+
+  const body = document.createElement('div');
+  body.className = 'result-item-body';
+  body.title = 'Klikni pro načtení partie a skok na tuto pozici';
   const elo = (e) => (e && e !== '?' ? ` (${e})` : '');
   const side = m.side === 'white' ? 'bílý' : 'černý';
   let tag = `${m.fullmove}. (${side})`;
   let extra = '';
   if (m.played) extra = ` — hráč: ${escape(m.played)} | best: ${escape(m.best)}`;
-  item.innerHTML = `
+  body.innerHTML = `
     <div class="result-line"><strong>#${idx}</strong> ${escape(m.white)}${elo(m.white_elo)} – ${escape(m.black)}${elo(m.black_elo)} · ${escape(m.event)}, ${escape(m.date)} · ${escape(m.result)}</div>
     <div class="result-line2">${tag}${extra}</div>
     <div class="result-fen">${escape(m.fen)}</div>
   `;
-  item.addEventListener('click', () => {
+  body.addEventListener('click', () => {
     const gi = Number(item.dataset.gameIdx);
     const ply = Number(item.dataset.ply);
     if (gi >= 0) {
@@ -595,6 +652,7 @@ function renderMatchItem(idx, m) {
       });
     }
   });
+  item.appendChild(body);
   return item;
 }
 
@@ -1023,6 +1081,7 @@ function setupEvents() {
   document.getElementById('btn-download-output').addEventListener('click', downloadOutput);
   document.getElementById('open-in-lichess').addEventListener('click', openInLichess);
   document.getElementById('btn-export-pdf').addEventListener('click', exportPdf);
+  document.getElementById('btn-select-all').addEventListener('click', toggleSelectAll);
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -1118,6 +1177,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('rule-select').value = state.selectedRule;
   renderRuleUI();
   updateExportPdfButton();
+  updateSelectAllButton();
   fetchPgns();
 });
 

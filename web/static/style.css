@@ -377,13 +377,30 @@ body.light #open-in-lichess:hover { background: #3377dd; }
   margin-bottom: 4px;
   background: #2a2a2a;
   border-radius: 3px;
-  cursor: pointer;
   border-left: 3px solid transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .result-item:hover {
   background: #353535;
   border-left-color: #4a90e2;
+}
+
+.result-item-checkbox {
+  flex: 0 0 auto;
+  margin: 4px 0 0 0;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #4a90e2;
+}
+
+.result-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: pointer;
 }
 
 .result-line { line-height: 1.4; }
