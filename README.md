@@ -150,6 +150,12 @@ Kliknutí na výsledek nahraje pozici na šachovnici nahoře.
 V hlavičce výstupu zmáčkni 📄 **PDF**. Vygeneruje PDF s 4 diagramy na A4
 stránku + sekce *Solutions* na konci. K dispozici pro Rule 1, 2, 4.
 
+Před exportem můžeš jednotlivé nálezy z PDF **vyřadit** odškrtnutím checkboxu
+vlevo u řádku (analýza občas vyplaví falešně pozitivní pozice, které
+nechceš dávat do trénovacího setu). Tlačítko **„✓ Vybrat vše" /
+„☐ Odznačit vše"** v hlavičce výstupu hromadně přepíná všechny řádky.
+Tooltip na PDF tlačítku ukazuje počet vybraných / celkem.
+
 ![PDF — diagramy](doc/img/pdf_diagramy.png)
 
 Na konci PDF jsou všechna řešení pohromadě (nejlepší tah engine vs. tah skutečně
