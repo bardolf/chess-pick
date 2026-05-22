@@ -104,7 +104,7 @@ Ctrl+C v terminálu server zastaví.
 3 sloupce (modré dělítko mezi nimi je tahatelné):
 
 - **Vlevo** — šachovnice, navigace po tazích (⏮ ◀ ▶ ⏭), FEN aktuální pozice,
-  odkaz na Lichess analýzu, výstup analýzy + PDF export
+  odkaz na Lichess analýzu, výstup analýzy + PDF / PGN export
 - **Uprostřed** — seznam PGN souborů z `twic/`, partie v souboru, detail partie
 - **Vpravo** — výběr pravidla, parametry pravidla, ▶ Analyze / ■ Stop
 
