@@ -247,24 +247,29 @@ def export_pgn(req: ExportPgnRequest) -> Response:
         raise HTTPException(400, "Žádné nálezy s platným game_idx.")
 
     pgn_path = _pgn_path(req.pgn)
+    needed = set(by_game.keys())
+    max_needed = max(needed)
     import io as _io
     buf = _io.StringIO()
     exporter = chess.pgn.FileExporter(buf, headers=True, variations=True, comments=True)
+    found_count = 0
 
-    with open(pgn_path, encoding="utf-8") as f:
-        gi = -1
-        while True:
-            game = chess.pgn.read_game(f)
-            if game is None:
-                break
-            gi += 1
-            if gi not in by_game:
-                continue
+    # Sdílíme stejný iterátor co používá analyze — stejná konvence indexace + tolerantní
+    # dekódování UTF-8. Pro velké PGN (TWIC ~5800 partií) breakneme jakmile překročíme
+    # nejvyšší potřebný index.
+    for gi, game in _iter_pgn_games(pgn_path):
+        if gi in needed:
             _annotate_game(game, by_game[gi], req.rule)
             game.accept(exporter)
             buf.write("\n\n")
+            found_count += 1
+        if gi >= max_needed:
+            break
 
     pgn_text = buf.getvalue()
+    if not pgn_text.strip():
+        raise HTTPException(404, "Nepodařilo se najít žádnou z partií podle game_idx.")
+    print(f"[chess-pick] export-pgn: {found_count} partii (max_idx={max_needed})", flush=True)
     base = req.pgn.rsplit(".", 1)[0] if "." in req.pgn else req.pgn
     rule_tag = f"-{req.rule}" if req.rule else ""
     filename = f"{base}{rule_tag}-marked.pgn"
