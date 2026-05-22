@@ -186,7 +186,12 @@ body.light .move-token.current { background: #2266cc; color: #fff; }
 
 main.three-col {
   display: grid;
-  grid-template-columns: 700px 6px 360px 6px 1fr;
+  /* Šířky sloupců škálují s viewportem, ale nejsou ani moc malé ani obří.
+     Uživatel může později rozšířit dělítkem, pak se nastaví explicit px. */
+  grid-template-columns:
+    clamp(540px, 38vw, 1000px) 6px
+    clamp(300px, 19vw, 480px) 6px
+    1fr;
   gap: 0;
   padding: 18px;
   height: calc(100vh - 72px);
@@ -224,11 +229,12 @@ main.three-col {
   align-items: stretch;
 }
 
-/* Chessboard — defaultně menší ať se FEN/output vejde i na laptop monitor.
-   Pro větší zobrazení uživatel může roztáhnout dělítko mezi sloupci. */
+/* Chessboard — responsive. Šířkou jen filluje sloupec (max ~1000px),
+   ale výškou ji limituje viewport (50vh) ať se vejde FEN/výsledek pod ní
+   i na nižších monitorech (laptop 768p). */
 .board {
   width: 100%;
-  max-width: min(520px, 45vh);
+  max-width: min(1000px, 50vh);
   align-self: center;
   flex: 0 0 auto;
 }
