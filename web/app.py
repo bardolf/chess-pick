@@ -250,26 +250,44 @@ def export_pgn(req: ExportPgnRequest) -> Response:
     needed = set(by_game.keys())
     max_needed = max(needed)
     import io as _io
-    buf = _io.StringIO()
-    exporter = chess.pgn.FileExporter(buf, headers=True, variations=True, comments=True)
-    found_count = 0
 
-    # Sdílíme stejný iterátor co používá analyze — stejná konvence indexace + tolerantní
-    # dekódování UTF-8. Pro velké PGN (TWIC ~5800 partií) breakneme jakmile překročíme
-    # nejvyšší potřebný index.
+    # Načteme zdrojové partie do paměti (jen ty, co potřebujeme),
+    # ať z nich pak můžeme tahat hlavičky pro jednotlivé výřezy.
+    source_games: dict[int, chess.pgn.Game] = {}
     for gi, game in _iter_pgn_games(pgn_path):
         if gi in needed:
-            _annotate_game(game, by_game[gi], req.rule)
-            game.accept(exporter)
-            buf.write("\n\n")
-            found_count += 1
+            source_games[gi] = game
         if gi >= max_needed:
             break
 
+    if not source_games:
+        raise HTTPException(404, "Nepodařilo se najít žádnou z partií podle game_idx.")
+
+    buf = _io.StringIO()
+    exporter = chess.pgn.FileExporter(buf, headers=True, variations=True, comments=True)
+    written = 0
+
+    # Každý nález = vlastní PGN záznam (samostatný `[Event]...` blok). Zachováváme
+    # pořadí, ve kterém přišly v UI.
+    for m in req.matches:
+        try:
+            gi = int(m["game_idx"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        src = source_games.get(gi)
+        if src is None:
+            continue
+        sub = _build_match_game(src, m, req.rule)
+        if sub is None:
+            continue
+        sub.accept(exporter)
+        buf.write("\n\n")
+        written += 1
+
     pgn_text = buf.getvalue()
     if not pgn_text.strip():
-        raise HTTPException(404, "Nepodařilo se najít žádnou z partií podle game_idx.")
-    print(f"[chess-pick] export-pgn: {found_count} partii (max_idx={max_needed})", flush=True)
+        raise HTTPException(404, "Žádný nález se nepodařilo převést na PGN záznam.")
+    print(f"[chess-pick] export-pgn: {written} zaznamu", flush=True)
     base = req.pgn.rsplit(".", 1)[0] if "." in req.pgn else req.pgn
     rule_tag = f"-{req.rule}" if req.rule else ""
     filename = f"{base}{rule_tag}-marked.pgn"
@@ -280,39 +298,83 @@ def export_pgn(req: ExportPgnRequest) -> Response:
     )
 
 
-def _annotate_game(game: chess.pgn.Game, matches: list[dict], rule: str | None) -> None:
-    """Připíše ke správným uzlům v partii komentář chess-picku."""
-    nodes_by_ply: dict[int, chess.pgn.ChildNode | chess.pgn.Game] = {}
-    nodes_by_ply[0] = game
-    node = game
-    while node.variations:
-        node = node.variations[0]
-        nodes_by_ply[node.board().ply()] = node
+_HEADERS_TO_COPY = (
+    "Event", "Site", "Date", "Round", "White", "Black",
+    "WhiteElo", "BlackElo", "ECO", "Opening", "Variation",
+)
 
-    for m in matches:
+
+def _build_match_game(
+    source: chess.pgn.Game,
+    match: dict,
+    rule: str | None,
+) -> chess.pgn.Game | None:
+    """Vytvoří samostatný PGN záznam z jednoho nálezu — pozice (FEN), `{[#]}`
+    diagram marker pro ChessBase a komentář s nejlepším / zahraným tahem.
+    """
+    fen = match.get("fen")
+    if not fen:
+        return None
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        return None
+
+    new_game = chess.pgn.Game()
+    for k in _HEADERS_TO_COPY:
+        if k in source.headers:
+            new_game.headers[k] = source.headers[k]
+    new_game.headers["Result"] = "*"
+    new_game.headers["FEN"] = fen
+    new_game.headers["SetUp"] = "1"
+    if rule:
+        new_game.headers["ChessPickRule"] = rule
+    # Pomocný kontext (číslo tahu) pro ChessBase
+    fullmove = match.get("fullmove")
+    if fullmove:
+        new_game.headers["ChessPickFullmove"] = str(fullmove)
+
+    # Komentář o tom co engine říká
+    parts = ["[chess-pick]"]
+    if rule:
+        parts.append(rule + ":")
+    played = match.get("played")
+    best = match.get("best")
+    if rule == "mate" and played:
+        parts.append(f"mate sequence: {played}")
+    elif played and best:
+        parts.append(f"best={best}, played={played}")
+    elif best:
+        parts.append(f"best={best}")
+    pick_comment = " ".join(parts)
+
+    # {[#]} = ChessBase diagram marker. Položíme ho jako prefix komentář k partii,
+    # aby ChessBase při importu pozici rovnou vyrenderoval jako diagram.
+    new_game.comment = "[#]"
+
+    moves_to_play: list[str] = []
+    if rule == "mate" and played:
+        moves_to_play = played.split()  # celá matová sekvence
+    elif rule in ("blunder", "zwischenzug") and played:
+        moves_to_play = [played]  # jen ten zahraný tah pro kontext
+
+    last_node: chess.pgn.GameNode = new_game
+    for san in moves_to_play:
         try:
-            ply = int(m.get("ply") or 0)
-        except (TypeError, ValueError):
-            continue
-        # blunder/zwischenzug: m.ply = pozice PŘED zahraným tahem → anotujeme tah (ply+1)
-        # mate / pawn_structure: m.ply je sama zajímavá pozice
-        target_ply = ply + 1 if rule in ("blunder", "zwischenzug") else ply
-        target = nodes_by_ply.get(target_ply) or nodes_by_ply.get(ply)
-        if target is None:
-            continue
-        parts = ["[chess-pick]"]
-        if rule:
-            parts.append(rule + ":")
-        played = m.get("played")
-        best = m.get("best")
-        if rule == "mate" and played:
-            parts.append(f"mate sequence: {played}")
-        elif played and best:
-            parts.append(f"best={best}, played={played}")
-        elif best:
-            parts.append(f"best={best}")
-        comment = " ".join(parts)
-        target.comment = (target.comment + " " if target.comment else "") + comment
+            mv = board.parse_san(san)
+        except (ValueError, chess.IllegalMoveError):
+            break
+        last_node = last_node.add_main_variation(mv)
+        board.push(mv)
+
+    if last_node is new_game:
+        # Žádný tah nepřidán (pawn_structure nebo parse fail) — komentář přiložíme
+        # vedle diagram markeru.
+        new_game.comment = f"[#] {pick_comment}"
+    else:
+        last_node.comment = pick_comment
+
+    return new_game
 
 
 @app.post("/api/analyze")
