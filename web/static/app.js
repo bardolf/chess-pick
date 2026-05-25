@@ -15,109 +15,383 @@ const state = {
   gameDetail: null,
   currentMoveIdx: 0,
   selectedRule: 'blunder',
+  lang: (localStorage.getItem('lang') === 'en') ? 'en' : 'cs',
 };
 
+// -------- i18n --------
+// `t(key)` pro statické UI stringy.
+// `tr(obj)` pro objekty tvaru {cs:'…', en:'…'} (v RULE_DEFS / MATE_ATTRS).
+const I18N = {
+  cs: {
+    // header / page
+    subtitle: '„pro filtrování zajímavých pozic"',
+    title_github: 'Otevřít README a zdroják na GitHubu',
+    theme_toggle: 'Přepnout dark / light mode',
+    // board nav
+    nav_start: 'Začátek partie', nav_back: 'Tah zpět',
+    nav_forward: 'Tah vpřed', nav_end: 'Konec partie',
+    lichess_link: 'Otevřít aktuální pozici v Lichess analýze (engine + database)',
+    // output header
+    output_header: 'Výsledek analýzy',
+    select_all: '✓ Vybrat vše',
+    select_all_off: '☐ Odznačit vše',
+    select_all_title: 'Vybrat / odznačit všechny nálezy pro PDF',
+    export_pdf_title: 'Stáhnout pozice jako PDF (A4, 4 diagramy na stránku + řešení)',
+    export_pgn_title: 'Stáhnout PGN partií s vyznačenými nálezy (pro ChessBase / Lichess studie)',
+    copy_output: 'Zkopírovat výstup',
+    download_output: 'Stáhnout výstup',
+    no_analysis: 'Žádná analýza zatím nespuštěna.',
+    // middle column
+    upload_pgn: 'Upload PGN',
+    pgn_files: 'PGN soubory',
+    games_in: 'Partie v',
+    nothing_selected: '(nic vybráno)',
+    game_detail: 'Detail partie',
+    select_game_hint: 'Vyber partii dvojklikem nahoře.',
+    // right column
+    rule: 'Pravidlo',
+    parameters: 'Parametry',
+    engine_params: 'Parametry enginu (Stockfish)',
+    engine_threads_hint: 'Počet CPU vláken Stockfishe. 1 = nejmenší zátěž stroje, vyšší = rychlejší analýza, ale vytíží jádra.',
+    engine_hash_hint: 'Velikost transposition table v RAM. 1024 = 1 GB. Větší = obvykle rychlejší (nepřesáhni volnou RAM).',
+    analyze: '▶ Analyze',
+    stop: '■ Stop',
+    // status / dynamic
+    status_analyzing: 'analyzuji...',
+    status_done: 'hotovo · {n} nálezů ({sec} s)',
+    status_stopped: 'zastaveno · {n} nálezů',
+    rule_header_start: 'Pravidlo: {rule} · čekám na nálezy...',
+    rule_header_running: 'Pravidlo: běží · {n} nálezů',
+    rule_header_stopped: 'Pravidlo: ZASTAVENO · {n} nálezů',
+    rule_header_progress: 'Pravidlo: progress · {games} partií, {matches} nálezů',
+    rule_header_done: 'Pravidlo: dokončeno{scanned} · {matches} nálezů',
+    games_scanned_suffix: ' · prošlo {n} partií',
+    no_pgn_selected: 'Nejdřív vyber PGN soubor (dvojklik na seznam vlevo).',
+    error_prefix: 'Chyba: ',
+    no_results_yet: 'Žádné výsledky.',
+    pgn_list_click: 'Klikni pro načtení partií',
+    bubble_include: 'Zahrnout do PDF',
+    bubble_click: 'Klikni pro načtení partie a skok na tuto pozici',
+    pdf_export_progress: '⏳ PDF',
+    pgn_export_progress: '⏳ PGN',
+    pdf_blocked_msg: 'PDF export není pro toto pravidlo k dispozici (jen Rule 1 — Blunder, Rule 2 — Zwischenzug, Rule 4 — Mate a Rule 5 — Only Move).',
+    pdf_no_rule_tooltip: 'PDF export není pro toto pravidlo k dispozici (jen rule 1, 2, 4, 5)',
+    pdf_wait_tooltip: 'Po spuštění analýzy ti tu nabídnu PDF s diagramy',
+    pdf_count_tooltip: 'Stáhnout {sel} z {total} pozic jako PDF (jen zaškrtnuté)',
+    pgn_wait_tooltip: 'Po spuštění analýzy ti tu nabídnu PGN s vyznačenými momenty',
+    pgn_count_tooltip: 'Stáhnout PGN {sel} z {total} partií s komentáři u nalezených tahů',
+    select_all_idle_tooltip: 'Po spuštění analýzy lze hromadně zaškrtnout / odznačit nálezy pro PDF',
+    select_all_select_tooltip: 'Vybrat všechny pro PDF',
+    select_all_unselect_tooltip: 'Odznačit všechny pro PDF',
+    fen_editor_tooltip: 'Otevře Lichess board editor s aktuálním FEN',
+    fen_editor_label: '🔗 board editor',
+    pgn_source_unknown: 'Zdrojový PGN soubor není známý — spusť analýzu znovu.',
+    pgn_error_prefix: 'Chyba při generování PGN: ',
+    error_generic: 'Chyba: ',
+    pdf_failed: 'PDF export selhal: ',
+    mate_in_label: 'mat za N tahů',
+    mate_in_hint: 'Počet tahů do matu (1–5). Pro 1 = přímý mat v 1 tahu, žádný předchozí tah. Pro 2+ se zobrazí (N-1) řádků k popisu tahů PŘED matem.',
+    mate_overall_hint:
+      'Pro každý tah popíšeš jeho povinné vlastnosti. „nezáleží" = filter ignoruje. ' +
+      'Tahy se aplikují obě barvy dohromady (matující strana i protivník) — řádek mat-1 ' +
+      'je tah těsně před matem, mat-{N-1} je nejvzdálenější.',
+    mate_row_title: 'tah mat-{n}',
+    mate_attr_check: 'šach',
+    mate_attr_capture: 'braní',
+    mate_attr_promotion: 'promotion',
+    mate_opt_any: 'nezáleží',
+    mate_opt_yes: 'ano',
+    mate_opt_no: 'ne',
+  },
+  en: {
+    subtitle: '„for filtering interesting positions"',
+    title_github: 'Open README and source on GitHub',
+    theme_toggle: 'Toggle dark / light mode',
+    nav_start: 'Game start', nav_back: 'Move back',
+    nav_forward: 'Move forward', nav_end: 'Game end',
+    lichess_link: 'Open current position in Lichess analysis (engine + database)',
+    output_header: 'Analysis output',
+    select_all: '✓ Select all',
+    select_all_off: '☐ Deselect all',
+    select_all_title: 'Select / deselect all matches for PDF',
+    export_pdf_title: 'Download positions as PDF (A4, 4 diagrams per page + solutions)',
+    export_pgn_title: 'Download annotated PGN (for ChessBase / Lichess study)',
+    copy_output: 'Copy output',
+    download_output: 'Download output',
+    no_analysis: 'No analysis run yet.',
+    upload_pgn: 'Upload PGN',
+    pgn_files: 'PGN files',
+    games_in: 'Games in',
+    nothing_selected: '(none selected)',
+    game_detail: 'Game detail',
+    select_game_hint: 'Double-click a game above to load it.',
+    rule: 'Rule',
+    parameters: 'Parameters',
+    engine_params: 'Engine parameters (Stockfish)',
+    engine_threads_hint: 'Number of Stockfish CPU threads. 1 = least load, higher = faster analysis but uses more cores.',
+    engine_hash_hint: 'Transposition table size in RAM. 1024 = 1 GB. Bigger = usually faster (do not exceed free RAM).',
+    analyze: '▶ Analyze',
+    stop: '■ Stop',
+    status_analyzing: 'analyzing...',
+    status_done: 'done · {n} matches ({sec} s)',
+    status_stopped: 'stopped · {n} matches',
+    rule_header_start: 'Rule: {rule} · waiting for matches...',
+    rule_header_running: 'Rule: running · {n} matches',
+    rule_header_stopped: 'Rule: STOPPED · {n} matches',
+    rule_header_progress: 'Rule: progress · {games} games, {matches} matches',
+    rule_header_done: 'Rule: finished{scanned} · {matches} matches',
+    games_scanned_suffix: ' · scanned {n} games',
+    no_pgn_selected: 'Pick a PGN file first (double-click in the middle list).',
+    error_prefix: 'Error: ',
+    no_results_yet: 'No matches.',
+    pgn_list_click: 'Click to load games',
+    bubble_include: 'Include in PDF',
+    bubble_click: 'Click to load this game and jump to this position',
+    pdf_export_progress: '⏳ PDF',
+    pgn_export_progress: '⏳ PGN',
+    pdf_blocked_msg: 'PDF export is not available for this rule (only Rule 1 — Blunder, Rule 2 — Zwischenzug, Rule 4 — Mate, Rule 5 — Only Move).',
+    pdf_no_rule_tooltip: 'PDF export is not available for this rule (only rule 1, 2, 4, 5)',
+    pdf_wait_tooltip: 'PDF will be available once analysis produces matches',
+    pdf_count_tooltip: 'Download {sel} of {total} positions as PDF (selected only)',
+    pgn_wait_tooltip: 'PGN will be available once analysis produces matches',
+    pgn_count_tooltip: 'Download annotated PGN of {sel} of {total} games',
+    select_all_idle_tooltip: 'After analysis runs you can bulk select / deselect matches for PDF',
+    select_all_select_tooltip: 'Select all for PDF',
+    select_all_unselect_tooltip: 'Deselect all for PDF',
+    fen_editor_tooltip: 'Open Lichess board editor with the current FEN',
+    fen_editor_label: '🔗 board editor',
+    pgn_source_unknown: 'Source PGN file unknown — run the analysis again.',
+    pgn_error_prefix: 'PGN generation failed: ',
+    error_generic: 'Error: ',
+    pdf_failed: 'PDF export failed: ',
+    mate_in_label: 'mate in N moves',
+    mate_in_hint: 'Number of moves to mate (1–5). 1 = direct mate in one, no preceding moves. For 2+ you get (N-1) rows to constrain moves leading to mate.',
+    mate_overall_hint:
+      'For each move you can constrain mandatory properties. "any" = filter ignored. ' +
+      'Both colors apply (mating side and defender) — row mate-1 is the move just before ' +
+      'mate, mate-{N-1} is the most distant one.',
+    mate_row_title: 'move mate-{n}',
+    mate_attr_check: 'check',
+    mate_attr_capture: 'capture',
+    mate_attr_promotion: 'promotion',
+    mate_opt_any: 'any',
+    mate_opt_yes: 'yes',
+    mate_opt_no: 'no',
+  },
+};
+
+function t(key, vars) {
+  let v = (I18N[state.lang] && I18N[state.lang][key]) || (I18N.cs[key]) || key;
+  if (vars) for (const k in vars) v = v.split('{' + k + '}').join(String(vars[k]));
+  return v;
+}
+
+function tr(field) {
+  if (field == null) return '';
+  if (typeof field === 'string') return field;
+  if (typeof field === 'object') return field[state.lang] || field.cs || field.en || '';
+  return String(field);
+}
+
+function applyLanguage(lang) {
+  state.lang = (lang === 'en') ? 'en' : 'cs';
+  localStorage.setItem('lang', state.lang);
+  document.documentElement.setAttribute('lang', state.lang);
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.setAttribute('title', t(el.dataset.i18nTitle));
+  });
+
+  const langBtn = document.getElementById('lang-toggle');
+  if (langBtn) langBtn.textContent = state.lang === 'cs' ? '🌐 CS' : '🌐 EN';
+
+  renderRuleSelect();
+  renderRuleUI();
+  updateExportPdfButton();
+  updateSelectAllButton();
+}
+
 // -------- Rule definitions (parameter schemas + descriptions) --------
+// Hodnoty typu {cs:'…', en:'…'} se rozbalují přes tr() / ruleDef().
+
+const MIN_ELO_PARAM = {
+  key: 'min_elo', type: 'number', default: 0,
+  label: { cs: 'min Elo obou hráčů', en: 'min Elo of both players' },
+  hint: {
+    cs: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.',
+    en: '0 = no filter (all games). Otherwise the game qualifies only if both players have Elo ≥ this value.',
+  },
+};
 
 const RULE_DEFS = {
   blunder: {
-    label: 'Rule 1 — Blunder',
-    description:
-      'Hledá pozice, kde hráč zahrál tah výrazně horší než nejlepší tah dle Stockfishe. ' +
-      'Spouští se přes všechny partie ve vybraném PGN.',
+    label: { cs: 'Rule 1 — Blunder', en: 'Rule 1 — Blunder' },
+    description: {
+      cs: 'Hledá pozice, kde hráč zahrál tah výrazně horší než nejlepší tah dle Stockfishe. Spouští se přes všechny partie ve vybraném PGN.',
+      en: 'Finds positions where the player made a move significantly worse than Stockfish\'s best. Runs over every game in the selected PGN.',
+    },
     params: [
-      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
-        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
-      { key: 'min_loss_cp', label: 'min ztráta (cp)', type: 'number', default: 100,
-        hint: 'Tah je mistake/blunder, pokud je horší o tolik centipawnů nebo víc. 100 cp = 1 pěšec.' },
-      { key: 'tie_tolerance_cp', label: 'tie tolerance (cp)', type: 'number', default: 20,
-        hint: 'Tahy do této vzdálenosti od top tahu se považují za rovnocenné. Hráč není ve chybě, když zahrál jeden z nich.' },
-      { key: 'eval_min_cp', label: 'min eval před tahem (cp)', type: 'number', default: -100000,
-        hint: 'Filtr na hodnocení pozice před zahraným tahem (z pohledu hráče). -100000 = bez spodní hranice. Doporučeno např. 150 — pozice musí mít zřetelnou výhodu, jinak "blunder" v už ztracené pozici nedává smysl.' },
-      { key: 'eval_max_cp', label: 'max eval před tahem (cp)', type: 'number', default: 100000,
-        hint: 'Horní mez. 100000 = bez horní hranice. Doporučeno např. 500 — pozice nesmí být už triviálně vyhraná.' },
-      { key: 'depth', label: 'depth', type: 'number', default: 16,
-        hint: 'Hloubka prohledávání Stockfishe (počet půltahů). Vyšší = přesnější, pomalejší.' },
-      { key: 'multipv', label: 'multipv', type: 'number', default: 3,
-        hint: 'Kolik nejlepších linií engine počítá. Vyšší = bezpečnější tie detekce, pomalejší.' },
+      MIN_ELO_PARAM,
+      { key: 'min_loss_cp', type: 'number', default: 100,
+        label: { cs: 'min ztráta (cp)', en: 'min loss (cp)' },
+        hint: { cs: 'Tah je mistake/blunder, pokud je horší o tolik centipawnů nebo víc. 100 cp = 1 pěšec.',
+                en: 'A move is a mistake/blunder when it loses at least this many centipawns. 100 cp = 1 pawn.' } },
+      { key: 'tie_tolerance_cp', type: 'number', default: 20,
+        label: { cs: 'tie tolerance (cp)', en: 'tie tolerance (cp)' },
+        hint: { cs: 'Tahy do této vzdálenosti od top tahu se považují za rovnocenné. Hráč není ve chybě, když zahrál jeden z nich.',
+                en: 'Moves within this many cp of the top move count as equally good — the player is not at fault if they played one of them.' } },
+      { key: 'eval_min_cp', type: 'number', default: -100000,
+        label: { cs: 'min eval před tahem (cp)', en: 'min eval before move (cp)' },
+        hint: { cs: 'Filtr na hodnocení pozice před zahraným tahem (z pohledu hráče). -100000 = bez spodní hranice. Doporučeno např. 150 — pozice musí mít zřetelnou výhodu, jinak "blunder" v už ztracené pozici nedává smysl.',
+                en: 'Filter on the position\'s eval before the played move (player POV). -100000 = no lower bound. Try 150 — position must have a clear advantage, otherwise "blunder" in an already lost position is meaningless.' } },
+      { key: 'eval_max_cp', type: 'number', default: 100000,
+        label: { cs: 'max eval před tahem (cp)', en: 'max eval before move (cp)' },
+        hint: { cs: 'Horní mez. 100000 = bez horní hranice. Doporučeno např. 500 — pozice nesmí být už triviálně vyhraná.',
+                en: 'Upper bound. 100000 = no upper bound. Try 500 — exclude trivially winning positions.' } },
+      { key: 'depth', type: 'number', default: 16,
+        label: { cs: 'depth', en: 'depth' },
+        hint: { cs: 'Hloubka prohledávání Stockfishe (počet půltahů). Vyšší = přesnější, pomalejší.',
+                en: 'Stockfish search depth (half-moves). Higher = more accurate, slower.' } },
+      { key: 'multipv', type: 'number', default: 3,
+        label: { cs: 'multipv', en: 'multipv' },
+        hint: { cs: 'Kolik nejlepších linií engine počítá. Vyšší = bezpečnější tie detekce, pomalejší.',
+                en: 'How many top lines the engine computes. Higher = safer tie detection, slower.' } },
     ],
   },
   only_move: {
-    label: 'Rule 5 — Only move (jediný správný tah)',
-    description:
-      'Hledá pozice, kde existuje jediný správný tah — po něm je pozice rovná, ' +
-      'ale druhý nejlepší (a všechny další) výrazně ztrácí. Klasická tréninková ' +
-      '„najdi přesný tah" kategorie. Best move nesmí být braní (vyřadí triviální rekapitulace).',
+    label: { cs: 'Rule 5 — Only move (jediný správný tah)', en: 'Rule 5 — Only move' },
+    description: {
+      cs: 'Hledá pozice, kde existuje jediný správný tah — po něm je pozice rovná, ale druhý nejlepší (a všechny další) výrazně ztrácí. Klasická tréninková „najdi přesný tah" kategorie. Best move nesmí být braní (vyřadí triviální rekapitulace).',
+      en: 'Finds positions with a unique correct move — after it the eval is balanced, while every other multipv line loses badly. Classic "find the only move" training set. Best move must not be a capture (skips trivial recaptures).',
+    },
     params: [
-      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
-        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
-      { key: 'best_max_abs_cp', label: '|best| max (cp)', type: 'number', default: 150,
-        hint: 'Po nejlepším tahu je pozice „rovná" — |eval| ≤ tato hodnota (z pohledu hráče). 150 = ±1.5 pěšce.' },
-      { key: 'second_max_cp', label: '2. nejlepší max (cp)', type: 'number', default: -200,
-        hint: 'Druhý nejlepší tah musí klesnout pod tuto hodnotu (z pohledu hráče). -200 = 2. nejlepší ztrácí aspoň 2 pěšce.' },
-      { key: 'min_gap_cp', label: 'min gap (cp)', type: 'number', default: 120,
-        hint: 'Minimální rozdíl best − 2. best (z pohledu hráče). 120 = best musí být o 1.2 pěšce lepší.' },
-      { key: 'exclude_captures', label: 'best nesmí být braní', type: 'checkbox', default: true,
-        hint: 'Vyřadí pozice, kde jediný správný tah je braní — typicky triviální rekapitulace.' },
-      { key: 'depth', label: 'depth', type: 'number', default: 16,
-        hint: 'Hloubka prohledávání Stockfishe. Vyšší = přesnější, pomalejší.' },
-      { key: 'multipv', label: 'multipv', type: 'number', default: 3,
-        hint: 'Kolik nejlepších linií engine počítá (potřebujeme alespoň 2 pro porovnání).' },
+      MIN_ELO_PARAM,
+      { key: 'best_max_abs_cp', type: 'number', default: 150,
+        label: { cs: '|best| max (cp)', en: '|best| max (cp)' },
+        hint: { cs: 'Po nejlepším tahu je pozice „rovná" — |eval| ≤ tato hodnota (z pohledu hráče). 150 = ±1.5 pěšce.',
+                en: 'After the best move the position is "balanced" — |eval| ≤ this value (player POV). 150 = ±1.5 pawn.' } },
+      { key: 'second_max_cp', type: 'number', default: -200,
+        label: { cs: '2. nejlepší max (cp)', en: '2nd best max (cp)' },
+        hint: { cs: 'Druhý nejlepší tah musí klesnout pod tuto hodnotu (z pohledu hráče). -200 = 2. nejlepší ztrácí aspoň 2 pěšce.',
+                en: 'The second-best move must fall below this value (player POV). -200 = 2nd best loses at least 2 pawns.' } },
+      { key: 'min_gap_cp', type: 'number', default: 120,
+        label: { cs: 'min gap (cp)', en: 'min gap (cp)' },
+        hint: { cs: 'Minimální rozdíl best − 2. best (z pohledu hráče). 120 = best musí být o 1.2 pěšce lepší.',
+                en: 'Minimum gap best − 2nd best (player POV). 120 = best must be 1.2 pawn better.' } },
+      { key: 'exclude_captures', type: 'checkbox', default: true,
+        label: { cs: 'best nesmí být braní', en: 'best must not be a capture' },
+        hint: { cs: 'Vyřadí pozice, kde jediný správný tah je braní — typicky triviální rekapitulace.',
+                en: 'Excludes positions where the only good move is a capture — typically trivial recaptures.' } },
+      { key: 'depth', type: 'number', default: 16,
+        label: { cs: 'depth', en: 'depth' },
+        hint: { cs: 'Hloubka prohledávání Stockfishe. Vyšší = přesnější, pomalejší.',
+                en: 'Stockfish search depth. Higher = more accurate, slower.' } },
+      { key: 'multipv', type: 'number', default: 3,
+        label: { cs: 'multipv', en: 'multipv' },
+        hint: { cs: 'Kolik nejlepších linií engine počítá (potřebujeme alespoň 2 pro porovnání).',
+                en: 'How many top lines the engine computes (need at least 2).' } },
     ],
   },
   zwischenzug: {
-    label: 'Rule 2 — Zwischenzug',
-    description:
-      'Hledá pozice, kde po soupeřově braní engine doporučuje non-recapture (mezitah). ' +
-      'Spouští se přes všechny partie ve vybraném PGN.',
+    label: { cs: 'Rule 2 — Zwischenzug', en: 'Rule 2 — Zwischenzug' },
+    description: {
+      cs: 'Hledá pozice, kde po soupeřově braní engine doporučuje non-recapture (mezitah). Spouští se přes všechny partie ve vybraném PGN.',
+      en: 'Finds positions where, after the opponent\'s capture, the engine recommends a non-recapture (intermezzo). Runs over every game in the selected PGN.',
+    },
     params: [
-      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
-        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
-      { key: 'min_gain_cp', label: 'min gain (cp)', type: 'number', default: 100,
-        hint: 'O kolik musí být mezitah lepší než nejlepší rekapitulace, aby pravidlo fires (cp). Ignoruje se, když je mezitah šach a "šach ignoruje gap" je zapnuté.' },
-      { key: 'require_check_or_capture', label: 'jen šach / branný', type: 'checkbox', default: true,
-        hint: 'Mezitah musí být šach nebo branný — odfiltruje klidné vývinové tahy, které nejsou taktický mezitah.' },
-      { key: 'min_player_cp', label: 'min hráčův eval (cp)', type: 'number', default: -100,
-        hint: 'Hráč po mezitahu nesmí být pod touhle hodnotou (z jeho pohledu). Vyřadí prohrané pozice, kde mezitah jen oddálí porážku.' },
-      { key: 'check_skips_gap', label: 'šach ignoruje gap', type: 'checkbox', default: true,
-        hint: 'Pokud je mezitah šach, fires bez ohledu na velikost gapu — šachy jsou téměř vždy zwischenzug.' },
-      { key: 'depth', label: 'depth', type: 'number', default: 16,
-        hint: 'Hloubka prohledávání Stockfishe. Vyšší = přesnější, pomalejší.' },
-      { key: 'multipv', label: 'multipv', type: 'number', default: 3,
-        hint: 'Kolik nejlepších linií engine počítá. Vyšší = lepší rekapitulační eval.' },
+      MIN_ELO_PARAM,
+      { key: 'min_gain_cp', type: 'number', default: 100,
+        label: { cs: 'min gain (cp)', en: 'min gain (cp)' },
+        hint: { cs: 'O kolik musí být mezitah lepší než nejlepší rekapitulace, aby pravidlo fires (cp). Ignoruje se, když je mezitah šach a "šach ignoruje gap" je zapnuté.',
+                en: 'How much better the intermezzo must be than the best recapture for the rule to fire (cp). Ignored when the intermezzo is a check and "check ignores gap" is on.' } },
+      { key: 'require_check_or_capture', type: 'checkbox', default: true,
+        label: { cs: 'jen šach / branný', en: 'check or capture only' },
+        hint: { cs: 'Mezitah musí být šach nebo branný — odfiltruje klidné vývinové tahy, které nejsou taktický mezitah.',
+                en: 'The intermezzo must be a check or capture — filters out quiet developing moves that are not a tactical intermezzo.' } },
+      { key: 'min_player_cp', type: 'number', default: -100,
+        label: { cs: 'min hráčův eval (cp)', en: 'min player eval (cp)' },
+        hint: { cs: 'Hráč po mezitahu nesmí být pod touhle hodnotou (z jeho pohledu). Vyřadí prohrané pozice, kde mezitah jen oddálí porážku.',
+                en: 'Player\'s eval after the intermezzo must not be below this (player POV). Excludes lost positions where the intermezzo just delays defeat.' } },
+      { key: 'check_skips_gap', type: 'checkbox', default: true,
+        label: { cs: 'šach ignoruje gap', en: 'check ignores gap' },
+        hint: { cs: 'Pokud je mezitah šach, fires bez ohledu na velikost gapu — šachy jsou téměř vždy zwischenzug.',
+                en: 'If the intermezzo is a check, fire regardless of the gap — checks are almost always intermezzos.' } },
+      { key: 'depth', type: 'number', default: 16,
+        label: { cs: 'depth', en: 'depth' },
+        hint: { cs: 'Hloubka prohledávání Stockfishe. Vyšší = přesnější, pomalejší.',
+                en: 'Stockfish search depth. Higher = more accurate, slower.' } },
+      { key: 'multipv', type: 'number', default: 3,
+        label: { cs: 'multipv', en: 'multipv' },
+        hint: { cs: 'Kolik nejlepších linií engine počítá. Vyšší = lepší rekapitulační eval.',
+                en: 'How many top lines the engine computes. Higher = better recapture eval.' } },
     ],
   },
   mate: {
-    label: 'Rule 4 — Mat (mate in N)',
-    description:
-      'Hledá pozice s vynuceným matem v zadaném počtu tahů (1–5). ' +
-      'Pro mat v 1 stačí najít pozici s matujícím tahem. ' +
-      'Pro mat v 2 a víc můžeš popsat vlastnosti každého tahu vedoucího k matu ' +
-      '(šach? braní? promotion?).',
-    params: [
-      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
-        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
-    ],
-    // dynamický UI — vlastní renderer
+    label: { cs: 'Rule 4 — Mat (mate in N)', en: 'Rule 4 — Mate (mate in N)' },
+    description: {
+      cs: 'Hledá pozice s vynuceným matem v zadaném počtu tahů (1–5). Pro mat v 1 stačí najít pozici s matujícím tahem. Pro mat v 2 a víc můžeš popsat vlastnosti každého tahu vedoucího k matu (šach? braní? promotion?).',
+      en: 'Finds positions with a forced mate in N moves (1–5). For mate in 1 it\'s enough to find the mating position. For 2+ you can constrain properties of each move leading to mate (check? capture? promotion?).',
+    },
+    params: [ MIN_ELO_PARAM ],
     customRender: true,
   },
   pawn_structure: {
-    label: 'Rule 3 — Struktura / rozestavění',
-    description:
-      'Hledá partie, ve kterých vznikla zadaná struktura figurek a pěšců. ' +
-      'Spouští se přes všechny partie ve vybraném PGN.',
+    label: { cs: 'Rule 3 — Struktura / rozestavění', en: 'Rule 3 — Structure / placement' },
+    description: {
+      cs: 'Hledá partie, ve kterých vznikla zadaná struktura figurek a pěšců. Spouští se přes všechny partie ve vybraném PGN.',
+      en: 'Finds games containing the given piece/pawn structure. Runs over every game in the selected PGN.',
+    },
     params: [
-      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
-        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
-      { key: 'fen', label: 'FEN', type: 'text', default: '8/8/8/8/3P4/4P3/PP3PPP/8 w - - 0 1',
-        hint: 'Pravidlo se dívá doslova na FEN — všechny zadané figurky musí být na svých čtvercích, té barvy a typu. Subset match: ostatní pole jsou libovolná.',
-        extra: 'fen-buttons' },
-      { key: 'opening_moves', label: 'zahájení (volitelné)', type: 'text',
-        default: '', placeholder: '1.d4 Nf6 2.c4 e6 3.Nc3 Bb4 4.a3 Bxc3+ 5.bxc3',
-        hint: 'Volitelně PGN tahy — partie musí projít touhle pozicí (různé transpozice ano). Prázdné = libovolné zahájení.' },
+      MIN_ELO_PARAM,
+      { key: 'fen', type: 'text', default: '8/8/8/8/3P4/4P3/PP3PPP/8 w - - 0 1', extra: 'fen-buttons',
+        label: { cs: 'FEN', en: 'FEN' },
+        hint: { cs: 'Pravidlo se dívá doslova na FEN — všechny zadané figurky musí být na svých čtvercích, té barvy a typu. Subset match: ostatní pole jsou libovolná.',
+                en: 'The rule reads the FEN literally — every specified piece must be on its square in the right color/type. Subset match: other squares are arbitrary.' } },
+      { key: 'opening_moves', type: 'text', default: '',
+        placeholder: { cs: '1.d4 Nf6 2.c4 e6 3.Nc3 Bb4 4.a3 Bxc3+ 5.bxc3', en: '1.d4 Nf6 2.c4 e6 3.Nc3 Bb4 4.a3 Bxc3+ 5.bxc3' },
+        label: { cs: 'zahájení (volitelné)', en: 'opening (optional)' },
+        hint: { cs: 'Volitelně PGN tahy — partie musí projít touhle pozicí (různé transpozice ano). Prázdné = libovolné zahájení.',
+                en: 'Optional PGN moves — the game must pass through this position (transpositions allowed). Empty = any opening.' } },
     ],
   },
 };
+
+function ruleDef(name) {
+  const def = RULE_DEFS[name];
+  if (!def) return null;
+  return {
+    label: tr(def.label),
+    description: tr(def.description),
+    customRender: def.customRender,
+    params: (def.params || []).map(p => ({
+      ...p,
+      label: tr(p.label),
+      hint: tr(p.hint),
+      placeholder: tr(p.placeholder),
+    })),
+  };
+}
+
+const RULE_ORDER = ['blunder', 'zwischenzug', 'pawn_structure', 'mate', 'only_move'];
+
+function renderRuleSelect() {
+  const sel = document.getElementById('rule-select');
+  if (!sel) return;
+  const prev = state.selectedRule;
+  sel.innerHTML = '';
+  for (const name of RULE_ORDER) {
+    const d = ruleDef(name);
+    if (!d) continue;
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = d.label;
+    if (name === prev) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
 
 // -------- Chessboard --------
 
@@ -274,20 +548,20 @@ function updateExportPdfButton() {
   const sel = selectedMatches().length;
   btn.disabled = !(allowed && sel > 0);
   if (!allowed) {
-    btn.title = 'PDF export není pro toto pravidlo k dispozici (jen rule 1, 2, 4, 5)';
+    btn.title = t('pdf_no_rule_tooltip');
   } else if (total === 0) {
-    btn.title = 'Po spuštění analýzy ti tu nabídnu PDF s diagramy';
+    btn.title = t('pdf_wait_tooltip');
   } else {
-    btn.title = `Stáhnout ${sel} z ${total} pozic jako PDF (jen zaškrtnuté)`;
+    btn.title = t('pdf_count_tooltip', { sel, total });
   }
 
   const pgnBtn = document.getElementById('btn-export-pgn');
   if (pgnBtn) {
     pgnBtn.disabled = sel === 0;
     if (total === 0) {
-      pgnBtn.title = 'Po spuštění analýzy ti tu nabídnu PGN s vyznačenými momenty';
+      pgnBtn.title = t('pgn_wait_tooltip');
     } else {
-      pgnBtn.title = `Stáhnout PGN ${sel} z ${total} partií s komentáři u nalezených tahů`;
+      pgnBtn.title = t('pgn_count_tooltip', { sel, total });
     }
   }
 }
@@ -299,14 +573,14 @@ function updateSelectAllButton() {
   const sel = selectedMatches().length;
   if (total === 0) {
     btn.disabled = true;
-    btn.textContent = '✓ Vybrat vše';
-    btn.title = 'Po spuštění analýzy lze hromadně zaškrtnout / odznačit nálezy pro PDF';
+    btn.textContent = t('select_all');
+    btn.title = t('select_all_idle_tooltip');
     return;
   }
   btn.disabled = false;
   const allOn = sel === total;
-  btn.textContent = allOn ? '☐ Odznačit vše' : '✓ Vybrat vše';
-  btn.title = allOn ? 'Odznačit všechny pro PDF' : 'Vybrat všechny pro PDF';
+  btn.textContent = allOn ? t('select_all_off') : t('select_all');
+  btn.title = allOn ? t('select_all_unselect_tooltip') : t('select_all_select_tooltip');
 }
 
 function toggleSelectAll() {
@@ -405,7 +679,7 @@ async function exportPdf() {
   const items = selectedMatches();
   if (items.length === 0) return;
   if (!['blunder', 'zwischenzug', 'mate', 'only_move'].includes(state.selectedRule)) {
-    alert('PDF export není pro toto pravidlo k dispozici (jen Rule 1 — Blunder, Rule 2 — Zwischenzug, Rule 4 — Mate a Rule 5 — Only Move).');
+    alert(t('pdf_blocked_msg'));
     return;
   }
   const btn = document.getElementById('btn-export-pdf');
@@ -554,7 +828,7 @@ async function exportPdf() {
     pdf.save(`chess-pick-${state.selectedRule}-puzzles.pdf`);
   } catch (e) {
     console.error('[PDF] error:', e);
-    alert('PDF export selhal: ' + (e.message || e));
+    alert(t('pdf_failed') + (e.message || e));
   } finally {
     btn.textContent = orig;
     updateExportPdfButton();
@@ -563,7 +837,7 @@ async function exportPdf() {
 
 async function runAnalyze() {
   if (!state.selectedPgn) {
-    alert('Nejdřív vyber PGN soubor (dvojklik na seznam vlevo).');
+    alert(t('no_pgn_selected'));
     return;
   }
   const params = collectParams();
@@ -574,7 +848,7 @@ async function runAnalyze() {
 
   btn.disabled = true;
   stopBtn.disabled = false;
-  status.textContent = 'analyzuji...';
+  status.textContent = t('status_analyzing');
   out.innerHTML = '<div class="result-header" id="result-header">analýza spuštěna...</div>';
 
   currentAbortController = new AbortController();
@@ -597,7 +871,7 @@ async function runAnalyze() {
       signal: currentAbortController.signal,
     });
     if (!r.ok) {
-      out.innerHTML = '<div class="result-empty">Chyba: ' + escape(await r.text()) + '</div>';
+      out.innerHTML = '<div class="result-empty">' + escape(t('error_prefix') + (await r.text())) + '</div>';
       return;
     }
 
@@ -617,14 +891,14 @@ async function runAnalyze() {
         matchCount = handleStreamMessage(msg, matchCount);
       }
     }
-    status.textContent = `hotovo · ${matchCount} nálezů (${((Date.now() - startTime) / 1000).toFixed(1)} s)`;
+    status.textContent = t('status_done', { n: matchCount, sec: ((Date.now() - startTime) / 1000).toFixed(1) });
   } catch (e) {
     if (e.name === 'AbortError') {
-      status.textContent = `zastaveno · ${matchCount} nálezů`;
+      status.textContent = t('status_stopped', { n: matchCount });
       const h = document.getElementById('result-header');
-      if (h) h.textContent = `Pravidlo: ZASTAVENO · ${matchCount} nálezů`;
+      if (h) h.textContent = t('rule_header_stopped', { n: matchCount });
     } else {
-      out.innerHTML = '<div class="result-empty">Chyba: ' + escape(e.message) + '</div>';
+      out.innerHTML = '<div class="result-empty">' + escape(t('error_prefix') + e.message) + '</div>';
     }
   } finally {
     btn.disabled = false;
@@ -641,9 +915,9 @@ function handleStreamMessage(msg, matchCount) {
   const out = document.getElementById('output-area');
   const h = document.getElementById('result-header');
   if (msg.type === 'start') {
-    if (h) h.textContent = `Pravidlo: ${msg.rule} · čekám na nálezy...`;
+    if (h) h.textContent = t('rule_header_start', { rule: msg.rule });
   } else if (msg.type === 'progress') {
-    if (h) h.textContent = `Pravidlo: progress · ${msg.games_scanned} partií, ${msg.matches_found} nálezů`;
+    if (h) h.textContent = t('rule_header_progress', { games: msg.games_scanned, matches: msg.matches_found });
   } else if (msg.type === 'match') {
     matchCount++;
     msg.data.selected = true;
@@ -652,14 +926,14 @@ function handleStreamMessage(msg, matchCount) {
     updateSelectAllButton();
     const item = renderMatchItem(matchCount, msg.data);
     out.appendChild(item);
-    if (h) h.textContent = `Pravidlo: běží · ${matchCount} nálezů`;
+    if (h) h.textContent = t('rule_header_running', { n: matchCount });
   } else if (msg.type === 'done') {
     if (h) {
-      const scanned = msg.games_scanned !== undefined ? ` · prošlo ${msg.games_scanned} partií` : '';
-      h.textContent = `Pravidlo: dokončeno${scanned} · ${msg.matches_total} nálezů`;
+      const scanned = msg.games_scanned !== undefined ? t('games_scanned_suffix', { n: msg.games_scanned }) : '';
+      h.textContent = t('rule_header_done', { scanned, matches: msg.matches_total });
     }
   } else if (msg.type === 'error') {
-    out.innerHTML = '<div class="result-empty">Chyba: ' + escape(msg.message) + '</div>';
+    out.innerHTML = '<div class="result-empty">' + escape(t('error_prefix') + msg.message) + '</div>';
   }
   return matchCount;
 }
@@ -674,7 +948,7 @@ function renderMatchItem(idx, m) {
   cb.type = 'checkbox';
   cb.className = 'result-item-checkbox';
   cb.checked = m.selected !== false;
-  cb.title = 'Zahrnout do PDF';
+  cb.title = t('bubble_include');
   cb.addEventListener('click', (e) => e.stopPropagation());
   cb.addEventListener('change', () => {
     m.selected = cb.checked;
@@ -685,7 +959,7 @@ function renderMatchItem(idx, m) {
 
   const body = document.createElement('div');
   body.className = 'result-item-body';
-  body.title = 'Klikni pro načtení partie a skok na tuto pozici';
+  body.title = t('bubble_click');
   const elo = (e) => (e && e !== '?' ? ` (${e})` : '');
   const side = m.side === 'white' ? 'bílý' : 'černý';
   let tag = `${m.fullmove}. (${side})`;
@@ -720,7 +994,7 @@ function renderPgnList() {
     const li = document.createElement('li');
     li.textContent = `${p.name} (${p.size_kb} KB)`;
     if (p.name === state.selectedPgn) li.classList.add('selected');
-    li.title = 'Klikni pro načtení partií';
+    li.title = t('pgn_list_click');
     li.addEventListener('click', () => {
       state.selectedPgn = p.name;
       document.getElementById('selected-pgn').textContent = p.name;
@@ -814,7 +1088,8 @@ function paramStorageKey(ruleName, paramKey) {
 }
 
 function renderRuleUI() {
-  const def = RULE_DEFS[state.selectedRule];
+  const def = ruleDef(state.selectedRule);
+  if (!def) return;
   document.getElementById('rule-description').textContent = def.description;
   const container = document.getElementById('rule-params');
   container.innerHTML = '';
@@ -872,8 +1147,8 @@ function renderRuleUI() {
       btnRow.className = 'fen-buttons';
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
-      editBtn.textContent = '🔗 board editor';
-      editBtn.title = 'Otevře Lichess board editor s aktuálním FEN';
+      editBtn.textContent = t('fen_editor_label');
+      editBtn.title = t('fen_editor_tooltip');
       editBtn.addEventListener('click', () => {
         const cur = input.value;
         const url = cur ? `https://lichess.org/editor/${encodeURIComponent(cur)}` : 'https://lichess.org/editor';
@@ -889,11 +1164,20 @@ function renderRuleUI() {
 
 // ---- Mate rule (Rule 4) custom UI ----
 
+// Hodnoty options jsou české keys (kvůli backendu — ten ano/ne/nezáleží
+// rozeznává podle stringu); textContent dáváme přes t() ať se v EN módu
+// zobrazí localized label.
 const MATE_ATTRS = [
-  { key: 'check',     label: 'šach',      options: ['nezáleží', 'ano', 'ne'] },
-  { key: 'capture',   label: 'braní',     options: ['nezáleží', 'ano', 'ne'] },
-  { key: 'promotion', label: 'promotion', options: ['nezáleží', 'ano', 'ne'] },
+  { key: 'check',     labelKey: 'mate_attr_check',     options: ['nezáleží', 'ano', 'ne'] },
+  { key: 'capture',   labelKey: 'mate_attr_capture',   options: ['nezáleží', 'ano', 'ne'] },
+  { key: 'promotion', labelKey: 'mate_attr_promotion', options: ['nezáleží', 'ano', 'ne'] },
 ];
+
+function mateOptionLabel(value) {
+  if (value === 'ano') return t('mate_opt_yes');
+  if (value === 'ne')  return t('mate_opt_no');
+  return t('mate_opt_any');
+}
 
 function renderMateUI(container, def) {
   // 1) min_elo (sdílený)
@@ -909,7 +1193,7 @@ function renderMateUI(container, def) {
   mateInWrap.className = 'param';
   const mateInLbl = document.createElement('label');
   const mateInSpan = document.createElement('span');
-  mateInSpan.textContent = 'mat za N tahů';
+  mateInSpan.textContent = t('mate_in_label');
   mateInLbl.appendChild(mateInSpan);
   const mateInSel = document.createElement('select');
   mateInSel.className = 'mate-select';
@@ -929,7 +1213,7 @@ function renderMateUI(container, def) {
 
   const mateInHint = document.createElement('div');
   mateInHint.className = 'param-hint';
-  mateInHint.textContent = 'Počet tahů do matu (1–5). Pro 1 = přímý mat v 1 tahu, žádný předchozí tah. Pro 2+ se zobrazí (N-1) řádků k popisu tahů PŘED matem.';
+  mateInHint.textContent = t('mate_in_hint');
   mateInWrap.appendChild(mateInHint);
   container.appendChild(mateInWrap);
 
@@ -945,10 +1229,7 @@ function renderMateUI(container, def) {
   overall.className = 'param-hint';
   overall.style.marginLeft = '0';
   overall.style.marginTop = '6px';
-  overall.textContent =
-    'Pro každý tah popíšeš jeho povinné vlastnosti. „nezáleží" = filter ignoruje. ' +
-    'Tahy se aplikují obě barvy dohromady (matující strana i protivník) — řádek mat-1 ' +
-    'je tah těsně před matem, mat-{N-1} je nejvzdálenější.';
+  overall.textContent = t('mate_overall_hint');
   container.appendChild(overall);
 }
 
@@ -959,7 +1240,7 @@ function buildMateMoveRow(moveIndex) {
 
   const title = document.createElement('div');
   title.className = 'mate-row-title';
-  title.textContent = `tah mat-${moveIndex}`;
+  title.textContent = t('mate_row_title', { n: moveIndex });
   row.appendChild(title);
 
   for (const attr of MATE_ATTRS) {
@@ -970,7 +1251,7 @@ function buildMateMoveRow(moveIndex) {
     const cell = document.createElement('label');
     cell.className = 'mate-cell';
     const lbl = document.createElement('span');
-    lbl.textContent = attr.label;
+    lbl.textContent = t(attr.labelKey);
     cell.appendChild(lbl);
 
     const sel = document.createElement('select');
@@ -979,7 +1260,7 @@ function buildMateMoveRow(moveIndex) {
     for (const o of attr.options) {
       const opt = document.createElement('option');
       opt.value = o;
-      opt.textContent = o;
+      opt.textContent = mateOptionLabel(o);
       if (o === value) opt.selected = true;
       sel.appendChild(opt);
     }
@@ -1116,7 +1397,7 @@ async function exportPgn() {
   const items = selectedMatches();
   if (items.length === 0) return;
   if (!state.selectedPgn) {
-    alert('Zdrojový PGN soubor není známý — spusť analýzu znovu.');
+    alert(t('pgn_source_unknown'));
     return;
   }
   const btn = document.getElementById('btn-export-pgn');
@@ -1135,7 +1416,7 @@ async function exportPgn() {
     });
     if (!r.ok) {
       const errTxt = await r.text();
-      alert('Chyba při generování PGN: ' + errTxt);
+      alert(t('pgn_error_prefix') + errTxt);
       return;
     }
     const blob = await r.blob();
@@ -1149,7 +1430,7 @@ async function exportPgn() {
     a.click();
     URL.revokeObjectURL(url);
   } catch (e) {
-    alert('Chyba: ' + e.message);
+    alert(t('error_generic') + e.message);
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
@@ -1270,15 +1551,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.toggle('light');
     localStorage.setItem('theme', document.body.classList.contains('light') ? 'light' : 'dark');
   });
+  document.getElementById('lang-toggle').addEventListener('click', () => {
+    applyLanguage(state.lang === 'cs' ? 'en' : 'cs');
+  });
 
   initBoard();
   setupEvents();
   setupPiecesAnimations();
   setupEngineParams();
+  renderRuleSelect();
   document.getElementById('rule-select').value = state.selectedRule;
-  renderRuleUI();
-  updateExportPdfButton();
-  updateSelectAllButton();
+  applyLanguage(state.lang);
   fetchPgns();
 });
 

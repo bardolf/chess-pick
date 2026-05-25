@@ -4,13 +4,14 @@
   <meta charset="UTF-8" />
   <title>chess-pick</title>
   <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
-  <link rel="stylesheet" href="/static/style.css?v=48" />
+  <link rel="stylesheet" href="/static/style.css?v=49" />
 </head>
 <body>
   <header>
     <h1><a href="https://github.com/bardolf/chess-pick#chess-pick" target="_blank" rel="noopener"
+           data-i18n-title="title_github"
            title="Otevřít README a zdroják na GitHubu">Chess-Pick</a></h1>
-    <blockquote class="subtitle">„pro filtrování zajímavých pozic"</blockquote>
+    <blockquote class="subtitle" data-i18n="subtitle">„pro filtrování zajímavých pozic"</blockquote>
 
     <!-- shared SVG defs (used by knight) -->
     <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -41,7 +42,8 @@
     </div>
 
     <div class="author">IM Jáchym Němec</div>
-    <button id="theme-toggle" class="theme-toggle" title="Přepnout dark / light mode">🌓</button>
+    <button id="lang-toggle" class="header-btn" title="Switch language">🌐 CS</button>
+    <button id="theme-toggle" class="header-btn" data-i18n-title="theme_toggle" title="Přepnout dark / light mode">🌓</button>
   </header>
 
   <main class="three-col" id="main-grid">
@@ -50,10 +52,10 @@
     <section class="col left">
       <div id="board" class="board"></div>
       <div class="board-nav">
-        <button id="nav-start" title="Začátek partie">⏮</button>
-        <button id="nav-back" title="Tah zpět">◀</button>
-        <button id="nav-forward" title="Tah vpřed">▶</button>
-        <button id="nav-end" title="Konec partie">⏭</button>
+        <button id="nav-start" data-i18n-title="nav_start" title="Začátek partie">⏮</button>
+        <button id="nav-back" data-i18n-title="nav_back" title="Tah zpět">◀</button>
+        <button id="nav-forward" data-i18n-title="nav_forward" title="Tah vpřed">▶</button>
+        <button id="nav-end" data-i18n-title="nav_end" title="Konec partie">⏭</button>
       </div>
       <div class="move-info">
         <span id="last-move">—</span>
@@ -62,18 +64,19 @@
         <label>FEN:</label>
         <input type="text" id="fen" readonly />
         <a id="open-in-lichess" target="_blank" rel="noopener"
+           data-i18n-title="lichess_link"
            title="Otevřít aktuální pozici v Lichess analýze (engine + database)">↗ Lichess</a>
       </div>
       <div class="output">
         <div class="output-header">
-          <strong>Výsledek analýzy</strong>
-          <button id="btn-select-all" title="Vybrat / odznačit všechny nálezy pro PDF" disabled>✓ Vybrat vše</button>
-          <button id="btn-export-pdf" title="Stáhnout pozice jako PDF (A4, 4 diagramy na stránku + řešení)" disabled>📄 PDF</button>
-          <button id="btn-export-pgn" title="Stáhnout PGN partií s vyznačenými nálezy (pro ChessBase / Lichess studie)" disabled>♟ PGN</button>
-          <button id="btn-copy-output" title="Zkopírovat výstup">📋</button>
-          <button id="btn-download-output" title="Stáhnout výstup">⬇</button>
+          <strong data-i18n="output_header">Výsledek analýzy</strong>
+          <button id="btn-select-all" data-i18n="select_all" data-i18n-title="select_all_title" title="Vybrat / odznačit všechny nálezy pro PDF" disabled>✓ Vybrat vše</button>
+          <button id="btn-export-pdf" data-i18n-title="export_pdf_title" title="Stáhnout pozice jako PDF (A4, 4 diagramy na stránku + řešení)" disabled>📄 PDF</button>
+          <button id="btn-export-pgn" data-i18n-title="export_pgn_title" title="Stáhnout PGN partií s vyznačenými nálezy (pro ChessBase / Lichess studie)" disabled>♟ PGN</button>
+          <button id="btn-copy-output" data-i18n-title="copy_output" title="Zkopírovat výstup">📋</button>
+          <button id="btn-download-output" data-i18n-title="download_output" title="Stáhnout výstup">⬇</button>
         </div>
-        <div id="output-area">Žádná analýza zatím nespuštěna.</div>
+        <div id="output-area" data-i18n="no_analysis">Žádná analýza zatím nespuštěna.</div>
       </div>
     </section>
 
@@ -83,22 +86,22 @@
     <section class="col middle">
       <div class="pgn-upload">
         <label class="upload-label">
-          Upload PGN
+          <span data-i18n="upload_pgn">Upload PGN</span>
           <input type="file" id="upload-input" accept=".pgn" />
         </label>
       </div>
       <div class="panel">
-        <div class="panel-title">PGN soubory</div>
+        <div class="panel-title" data-i18n="pgn_files">PGN soubory</div>
         <ul id="pgn-list" class="scroll-list"></ul>
       </div>
       <div class="panel">
-        <div class="panel-title">Partie v <span id="selected-pgn">(nic vybráno)</span></div>
+        <div class="panel-title"><span data-i18n="games_in">Partie v</span> <span id="selected-pgn" data-i18n="nothing_selected">(nic vybráno)</span></div>
         <ul id="games-list" class="scroll-list"></ul>
       </div>
       <div class="panel game-detail">
-        <div class="panel-title">Detail partie</div>
+        <div class="panel-title" data-i18n="game_detail">Detail partie</div>
         <div id="game-detail-area">
-          <em>Vyber partii dvojklikem nahoře.</em>
+          <em data-i18n="select_game_hint">Vyber partii dvojklikem nahoře.</em>
         </div>
       </div>
     </section>
@@ -108,45 +111,39 @@
     <!-- RIGHT: rule + params + analyze -->
     <section class="col right">
       <div class="panel">
-        <div class="panel-title">Pravidlo</div>
-        <select id="rule-select">
-          <option value="blunder" selected>Rule 1 — Blunder</option>
-          <option value="zwischenzug">Rule 2 — Zwischenzug</option>
-          <option value="pawn_structure">Rule 3 — Struktura / rozestavění</option>
-          <option value="mate">Rule 4 — Mat (mate in N)</option>
-          <option value="only_move">Rule 5 — Only move</option>
-        </select>
+        <div class="panel-title" data-i18n="rule">Pravidlo</div>
+        <select id="rule-select"></select>
         <p id="rule-description" class="rule-description"></p>
       </div>
 
       <div class="panel">
-        <div class="panel-title">Parametry</div>
+        <div class="panel-title" data-i18n="parameters">Parametry</div>
         <div id="rule-params"></div>
       </div>
 
       <div class="panel">
-        <div class="panel-title">Parametry enginu (Stockfish)</div>
+        <div class="panel-title" data-i18n="engine_params">Parametry enginu (Stockfish)</div>
         <div id="engine-params">
           <div class="param">
             <label>
               <span>Threads</span>
               <input type="number" id="engine-threads" min="1" max="64" value="2" />
             </label>
-            <div class="param-hint">Počet CPU vláken Stockfishe. 1 = nejmenší zátěž stroje, vyšší = rychlejší analýza, ale vytíží jádra.</div>
+            <div class="param-hint" data-i18n="engine_threads_hint">Počet CPU vláken Stockfishe. 1 = nejmenší zátěž stroje, vyšší = rychlejší analýza, ale vytíží jádra.</div>
           </div>
           <div class="param">
             <label>
               <span>Hash (MB)</span>
               <input type="number" id="engine-hash" min="16" max="8192" step="16" value="1024" />
             </label>
-            <div class="param-hint">Velikost transposition table v RAM. 1024 = 1 GB. Větší = obvykle rychlejší (nepřesáhni volnou RAM).</div>
+            <div class="param-hint" data-i18n="engine_hash_hint">Velikost transposition table v RAM. 1024 = 1 GB. Větší = obvykle rychlejší (nepřesáhni volnou RAM).</div>
           </div>
         </div>
       </div>
 
       <div class="analyze-section">
-        <button id="btn-analyze">▶ Analyze</button>
-        <button id="btn-stop" disabled>■ Stop</button>
+        <button id="btn-analyze" data-i18n="analyze">▶ Analyze</button>
+        <button id="btn-stop" data-i18n="stop" disabled>■ Stop</button>
         <span id="analyze-status"></span>
       </div>
     </section>
@@ -156,6 +153,6 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
   <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-  <script src="/static/app.js?v=48"></script>
+  <script src="/static/app.js?v=49"></script>
 </body>
 </html>

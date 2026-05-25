@@ -61,7 +61,8 @@ body.light header h1 a:hover {
   letter-spacing: 0.3px;
 }
 
-.theme-toggle {
+.theme-toggle,
+.header-btn {
   background: transparent;
   border: 1px solid #444;
   color: #ccc;
@@ -69,12 +70,19 @@ body.light header h1 a:hover {
   border-radius: 4px;
   cursor: pointer;
   font-size: 1.1em;
-  margin-left: 12px;
+  margin-left: 8px;
 }
 
-.theme-toggle:hover {
+.theme-toggle:hover,
+.header-btn:hover {
   background: #2a2a2a;
   color: #fff;
+}
+
+#lang-toggle {
+  font-size: 0.95em;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 /* ===== LIGHT THEME OVERRIDES ===== */
@@ -91,8 +99,10 @@ body.light header {
 
 body.light .subtitle { color: #555; border-left-color: #2266cc; }
 body.light .author { color: #444; }
-body.light .theme-toggle { color: #333; border-color: #ccc; }
-body.light .theme-toggle:hover { background: #f0f0f0; color: #000; }
+body.light .theme-toggle,
+body.light .header-btn { color: #333; border-color: #ccc; }
+body.light .theme-toggle:hover,
+body.light .header-btn:hover { background: #f0f0f0; color: #000; }
 
 body.light .panel { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 body.light .panel-title { background: #f5f5f5; color: #222; border-bottom-color: #e5e5e5; }
