@@ -4,3 +4,10 @@ __pycache__/
 .pytest_cache/
 *.db
 !tests/zwitschenzug/eval_cache.db
+
+# Stažené TWIC PGN (user-specific) — výjimka pro commitnutý sample twic1644.pgn
+twic/*.pgn
+!twic/twic1644.pgn
+
+# Runtime cache TWIC indexu (regeneruje se z theweekinchess.com)
+data/twic_index.json
