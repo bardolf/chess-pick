@@ -111,6 +111,19 @@ Ctrl+C v terminálu server zastaví.
 
 ### Pravidla
 
+Stručný přehled — co které pravidlo dělá a kdy ho použít:
+
+| | **Rule 1 Blunder** | **Rule 2 Zwischenzug** | **Rule 3 Struktura** | **Rule 4 Mat (mate in N)** | **Rule 5 Only move** |
+|---|---|---|---|---|---|
+| **Co engine porovnává** | best vs. played | best vs. recapture | (nic — pattern match) | (nic — detekce mat. pozice) | best vs. 2nd best |
+| **Stockfish** | ✅ ANO | ✅ ANO | ❌ NE | ❌ NE | ✅ ANO |
+| **Vyžaduje kontext** | nic | předchozí tah byl branný | FEN vzor figurek (+ volitelně zahájení) | partie končí matem | nic |
+| **Závisí na zahraném tahu?** | ANO (played = blunder) | ne | ne (jen že pozice se v partii objevila) | ANO (mat byl skutečně dán) | ne |
+| **Typický výstup** | „on to zahrál špatně" | „tady byl mezitah" | „v partii vznikla tato struktura" | „mat v N tazích, vyřeš" | „tady musíš najít přesný tah" |
+| **Trénink** | rozbor / hledání chyb | taktický motiv | strategie / zahájení | matový vzor | čistá kalkulace |
+
+Detaily jednotlivých pravidel:
+
 ![Pravý sloupec s parametry pravidla](doc/img/rule-1.png)
 
 #### Rule 1 — Blunder / Mistake
