@@ -405,14 +405,14 @@ def _format_match_pgn(
 @app.post("/api/analyze")
 def analyze(req: AnalyzeRequest) -> StreamingResponse:
     pgn_path = _pgn_path(req.pgn)
+    # `limit=None` => bez stropu, projíždíme dokud PGN nedojde (nebo dokud
+    # uživatel nezmáčkne Stop).
+    limit = req.limit
     if req.rule == "pawn_structure":
-        limit = req.limit or 500
         gen = _stream_pawn_structure(pgn_path, req.params, limit)
     elif req.rule in ("blunder", "zwischenzug", "only_move"):
-        limit = req.limit or 50
         gen = _stream_engine(pgn_path, req.rule, req.params, limit, req.engine)
     elif req.rule == "mate":
-        limit = req.limit or 100
         gen = _stream_mate(pgn_path, req.params, limit)
     else:
         raise HTTPException(400, f"Neznámé pravidlo: {req.rule}")
@@ -461,7 +461,7 @@ def _build_elo_rule(params: dict):
     return MinElo(threshold=min_elo, both=True)
 
 
-def _stream_pawn_structure(pgn_path: Path, params: dict, limit: int):
+def _stream_pawn_structure(pgn_path: Path, params: dict, limit: int | None):
     fen = params.get("fen", "")
     if not fen:
         yield _emit({"type": "error", "message": "Pawn structure rule vyžaduje 'fen' parametr"})
@@ -503,12 +503,12 @@ def _stream_pawn_structure(pgn_path: Path, params: dict, limit: int):
         if hit is not None:
             yield _emit({"type": "match", "data": {**_game_meta(game, game_idx), **hit}})
             matches_found += 1
-            if matches_found >= limit:
+            if limit is not None and matches_found >= limit:
                 break
     yield _emit({"type": "done", "games_scanned": games_scanned, "matches_total": matches_found})
 
 
-def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int, engine_opts: dict | None = None):
+def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int | None, engine_opts: dict | None = None):
     depth = int(params.get("depth", DEFAULT_DEPTH))
     multipv = int(params.get("multipv", DEFAULT_MULTIPV))
     if rule_name == "blunder":
@@ -611,7 +611,7 @@ def _attr_match(filter_value, actual_bool: bool) -> bool:
     return True
 
 
-def _stream_mate(pgn_path: Path, params: dict, limit: int):
+def _stream_mate(pgn_path: Path, params: dict, limit: int | None):
     try:
         mate_in = int(params.get("mate_in") or 1)
     except (TypeError, ValueError):
@@ -702,11 +702,11 @@ def _stream_mate(pgn_path: Path, params: dict, limit: int):
             }
             yield _emit({"type": "match", "data": data})
             matches_found += 1
-            if matches_found >= limit:
+            if limit is not None and matches_found >= limit:
                 break
             break  # max 1 mate sekvence per partii
 
-        if matches_found >= limit:
+        if limit is not None and matches_found >= limit:
             break
 
     yield _emit({"type": "done", "games_scanned": games_scanned, "matches_total": matches_found})
