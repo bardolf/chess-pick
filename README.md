@@ -18,6 +18,7 @@ pozice, které si pak řešíš sám.
 - Otevření aktuální pozice rovnou v Lichess analýze (engine + database)
 - Import vlastní partie do Lichess studie přes API
 - Light / dark theme
+- Přepínání jazyka **CS / EN** (čeština je default, PDF je vždy v EN)
 
 ## Požadavky
 
@@ -214,9 +215,15 @@ checkboxů (do PGN jdou jen zaškrtnuté nálezy).
 
 ![Záznam otevřený v ChessBase](doc/img/chessbase.png)
 
-### Theme
+### Theme a jazyk
 
-🌓 v pravém horním rohu hlavičky přepíná **dark / light**. Volba se ukládá.
+V pravém horním rohu hlavičky:
+
+- **🌓** přepíná **dark / light** theme
+- **🌐 CS / EN** přepíná jazyk celého UI (texty, popisky pravidel, hinty, status hlášky)
+
+Obě volby se ukládají do `localStorage`. PDF export zůstává v angličtině v obou
+jazykových režimech (univerzální popisky pro tisk / sdílení).
 
 ---
 
