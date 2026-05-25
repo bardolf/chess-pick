@@ -85,6 +85,13 @@ const I18N = {
     select_all_unselect_tooltip: 'Odznačit všechny pro PDF',
     fen_editor_tooltip: 'Otevře Lichess board editor s aktuálním FEN',
     fen_editor_label: '🔗 board editor',
+    twic_placeholder: '— TWIC ze sítě —',
+    twic_select_title: 'Vyber TWIC vydání ke stažení (theweekinchess.com)',
+    twic_download_title: 'Stáhnout PGN vybraného TWIC vydání',
+    twic_loading: 'načítám TWIC seznam...',
+    twic_fetch_failed: 'TWIC seznam se nepodařilo stáhnout (zkontroluj internet).',
+    twic_download_failed: 'Stažení TWIC se nezdařilo: ',
+    twic_label: 'TWIC {n} ({date})',
     pgn_source_unknown: 'Zdrojový PGN soubor není známý — spusť analýzu znovu.',
     pgn_error_prefix: 'Chyba při generování PGN: ',
     error_generic: 'Chyba: ',
@@ -160,6 +167,13 @@ const I18N = {
     select_all_unselect_tooltip: 'Deselect all for PDF',
     fen_editor_tooltip: 'Open Lichess board editor with the current FEN',
     fen_editor_label: '🔗 board editor',
+    twic_placeholder: '— TWIC from the net —',
+    twic_select_title: 'Pick a TWIC issue to download (theweekinchess.com)',
+    twic_download_title: 'Download the PGN of the selected TWIC issue',
+    twic_loading: 'fetching TWIC list...',
+    twic_fetch_failed: 'TWIC list fetch failed (check your internet).',
+    twic_download_failed: 'TWIC download failed: ',
+    twic_label: 'TWIC {n} ({date})',
     pgn_source_unknown: 'Source PGN file unknown — run the analysis again.',
     pgn_error_prefix: 'PGN generation failed: ',
     error_generic: 'Error: ',
@@ -527,6 +541,61 @@ async function uploadPgn(file) {
     return;
   }
   await fetchPgns();
+}
+
+async function fetchTwicList() {
+  const sel = document.getElementById('twic-select');
+  if (!sel) return;
+  try {
+    const r = await fetch('/api/twic/list');
+    if (!r.ok) {
+      sel.innerHTML = `<option value="">${t('twic_fetch_failed')}</option>`;
+      return;
+    }
+    const data = await r.json();
+    sel.innerHTML = `<option value="">${t('twic_placeholder')}</option>`;
+    for (const it of (data.items || [])) {
+      const opt = document.createElement('option');
+      opt.value = String(it.number);
+      opt.textContent = t('twic_label', { n: it.number, date: it.date });
+      sel.appendChild(opt);
+    }
+  } catch (e) {
+    console.warn('TWIC list fetch failed', e);
+    sel.innerHTML = `<option value="">${t('twic_fetch_failed')}</option>`;
+  }
+}
+
+async function downloadTwic() {
+  const sel = document.getElementById('twic-select');
+  const btn = document.getElementById('twic-download');
+  const number = parseInt(sel.value);
+  if (!number) return;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try {
+    const r = await fetch('/api/twic/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number }),
+    });
+    if (!r.ok) {
+      alert(t('twic_download_failed') + (await r.text()));
+      return;
+    }
+    const info = await r.json();
+    await fetchPgns();
+    state.selectedPgn = info.name;
+    document.getElementById('selected-pgn').textContent = info.name;
+    renderPgnList();
+    fetchGames(info.name);
+  } catch (e) {
+    alert(t('twic_download_failed') + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
 }
 
 let currentAbortController = null;
@@ -1441,6 +1510,12 @@ function setupEvents() {
     const f = e.target.files[0];
     if (f) uploadPgn(f);
   });
+  const twicSel = document.getElementById('twic-select');
+  const twicBtn = document.getElementById('twic-download');
+  if (twicSel && twicBtn) {
+    twicSel.addEventListener('change', () => { twicBtn.disabled = !twicSel.value; });
+    twicBtn.addEventListener('click', downloadTwic);
+  }
   document.getElementById('nav-start').addEventListener('click', goToStart);
   document.getElementById('nav-forward').addEventListener('click', goForward);
   document.getElementById('nav-back').addEventListener('click', goBack);
@@ -1559,6 +1634,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('rule-select').value = state.selectedRule;
   applyLanguage(state.lang);
   fetchPgns();
+  fetchTwicList();
 });
 
 const ENGINE_PARAM_FIELDS = [

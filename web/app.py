@@ -115,6 +115,103 @@ async def upload_pgn(file: UploadFile = File(...)) -> dict:
     return {"name": dest.name, "size_kb": len(content) // 1024}
 
 
+# ----------------------------- TWIC scraper -----------------------------
+# Index ze stránky theweekinchess.com/twic. Cachuje se na disk; staré položky
+# se nemění, jen občas přibyde nová položka shora.
+_TWIC_INDEX_PATH = PROJECT_ROOT / "data" / "twic_index.json"
+_TWIC_INDEX_TTL_SECONDS = 6 * 60 * 60  # 6 hodin
+_TWIC_ROW_RE = __import__("re").compile(
+    r"<td>(\d{4}-\d{2}-\d{2})</td>\s*"
+    r'<td><a href="[^"]*?/html/twic(\d+)\.html">HTML</a></td>\s*'
+    r'<td><a href="[^"]*?/zips/twic\d+g\.zip">PGN</a></td>'
+)
+
+
+def _parse_twic_index(html: str) -> list[dict]:
+    """Vrátí jen TWIC vydání, která mají PGN ZIP — to je TWIC 920 a novější.
+    Starší jen jako HTML stránky, ty nás nezajímají."""
+    items: list[dict] = []
+    for m in _TWIC_ROW_RE.finditer(html):
+        items.append({"number": int(m.group(2)), "date": m.group(1)})
+    items.sort(key=lambda x: x["number"], reverse=True)
+    return items
+
+
+@app.get("/api/twic/list")
+def twic_list() -> dict:
+    """Vrátí seznam TWIC vydání (number, date). Cachuje na disk 6 hodin."""
+    import time as _time
+    cached: dict | None = None
+    if _TWIC_INDEX_PATH.is_file():
+        try:
+            cached = json.loads(_TWIC_INDEX_PATH.read_text(encoding="utf-8"))
+            if _time.time() - float(cached.get("fetched_at", 0)) < _TWIC_INDEX_TTL_SECONDS:
+                return cached
+        except Exception:
+            cached = None
+
+    http_req = urllib.request.Request(
+        "https://theweekinchess.com/twic",
+        headers={"User-Agent": "chess-pick/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(http_req, timeout=20) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        if cached:  # fallback na zastaralou cache
+            return cached
+        raise HTTPException(502, f"Nepodařilo se stáhnout TWIC index: {e}")
+
+    items = _parse_twic_index(html)
+    payload = {"fetched_at": _time.time(), "items": items}
+    try:
+        _TWIC_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _TWIC_INDEX_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+    return payload
+
+
+class TwicDownloadRequest(BaseModel):
+    number: int
+
+
+@app.post("/api/twic/download")
+def twic_download(req: TwicDownloadRequest) -> dict:
+    """Stáhne ZIP s PGN pro daný TWIC, rozbalí, uloží jako twic/twic{N}.pgn."""
+    import io as _io
+    import zipfile
+    if req.number < 920:
+        raise HTTPException(400, "TWIC číslování začíná na 920.")
+    zip_url = f"https://theweekinchess.com/zips/twic{req.number}g.zip"
+    http_req = urllib.request.Request(
+        zip_url,
+        headers={"User-Agent": "chess-pick/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(http_req, timeout=30) as resp:
+            zip_bytes = resp.read()
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise HTTPException(404, f"TWIC {req.number} neexistuje (404).")
+        raise HTTPException(502, f"Stažení TWIC {req.number} selhalo: HTTP {e.code}")
+    except Exception as e:
+        raise HTTPException(502, f"Stažení TWIC {req.number} selhalo: {e}")
+
+    try:
+        with zipfile.ZipFile(_io.BytesIO(zip_bytes)) as z:
+            pgn_names = [n for n in z.namelist() if n.lower().endswith(".pgn")]
+            if not pgn_names:
+                raise HTTPException(502, "Stažený ZIP neobsahuje .pgn soubor.")
+            pgn_bytes = z.read(pgn_names[0])
+    except zipfile.BadZipFile:
+        raise HTTPException(502, "Stažený soubor není platný ZIP.")
+
+    target = TWIC_DIR / f"twic{req.number}.pgn"
+    target.write_bytes(pgn_bytes)
+    return {"name": target.name, "size_kb": len(pgn_bytes) // 1024, "number": req.number}
+
+
 @app.get("/api/pgns/{name}/games")
 def list_games(name: str) -> list[dict]:
     """Rychlý seznam — používá `read_headers` (nečte tahy)."""

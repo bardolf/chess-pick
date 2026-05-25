@@ -458,7 +458,10 @@ body.light #open-in-lichess:hover { background: #3377dd; }
   padding: 8px;
   background: #222;
   border-radius: 4px;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
 }
 
 .upload-label {
@@ -470,10 +473,46 @@ body.light #open-in-lichess:hover { background: #3377dd; }
   cursor: pointer;
   font-weight: bold;
   font-size: 0.95em;
+  text-align: center;
 }
 
 .upload-label:hover { background: #4a6a8a; }
 .upload-label input[type="file"] { display: none; }
+
+.twic-picker {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.twic-picker select {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.twic-picker button {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  background: #3a5a7a;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.95em;
+  font-weight: bold;
+}
+.twic-picker button:hover { background: #4a6a8a; }
+.twic-picker button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+body.light .twic-picker select { background: #fff; color: #222; border-color: #ccc; }
+body.light .twic-picker button { background: #2266cc; }
+body.light .twic-picker button:hover { background: #3377dd; }
 
 .game-detail {
   flex: 1;
