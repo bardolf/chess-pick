@@ -72,6 +72,7 @@ const I18N = {
     no_results_yet: 'Žádné výsledky.',
     pgn_list_click: 'Klikni pro načtení partií (a zaškrtnutí pro analýzu)',
     pgn_include_for_analysis: 'Zahrnout do analýzy',
+    pgn_multi_label: '{name} (+ {extra} další pro analýzu)',
     rule_header_multi: 'PGN {i}/{total} [{pgn}]',
     bubble_include: 'Zahrnout do PDF',
     bubble_click: 'Klikni pro načtení partie a skok na tuto pozici',
@@ -160,6 +161,7 @@ const I18N = {
     no_results_yet: 'No matches.',
     pgn_list_click: 'Click to load games (and select for analysis)',
     pgn_include_for_analysis: 'Include in analysis',
+    pgn_multi_label: '{name} (+ {extra} more for analysis)',
     rule_header_multi: 'PGN {i}/{total} [{pgn}]',
     bubble_include: 'Include in PDF',
     bubble_click: 'Click to load this game and jump to this position',
@@ -247,6 +249,7 @@ function applyLanguage(lang) {
     const filterEl = document.getElementById('twic-filter');
     renderTwicList(filterEl ? filterEl.value : '');
   }
+  if (typeof updateSelectedPgnLabel === 'function') updateSelectedPgnLabel();
 }
 
 // -------- Rule definitions (parameter schemas + descriptions) --------
@@ -529,6 +532,20 @@ function updateMoveCounter() {
 
 // -------- API --------
 
+function updateSelectedPgnLabel() {
+  const span = document.getElementById('selected-pgn');
+  if (!span) return;
+  const active = state.selectedPgn;
+  const total = state.analysisPgns.size;
+  if (!active) {
+    span.textContent = t('nothing_selected');
+  } else if (total <= 1) {
+    span.textContent = active;
+  } else {
+    span.textContent = t('pgn_multi_label', { name: active, extra: total - 1 });
+  }
+}
+
 async function fetchPgns() {
   const r = await fetch('/api/pgns');
   state.pgns = await r.json();
@@ -537,9 +554,9 @@ async function fetchPgns() {
   if (!state.selectedPgn && state.pgns.length > 0) {
     state.selectedPgn = state.pgns[0].name;
     state.analysisPgns.add(state.selectedPgn);
-    document.getElementById('selected-pgn').textContent = state.selectedPgn;
     fetchGames(state.selectedPgn);
   }
+  updateSelectedPgnLabel();
   renderPgnList();
 }
 
@@ -574,7 +591,7 @@ async function uploadPgn(file) {
   if (info?.name) {
     state.selectedPgn = info.name;
     state.analysisPgns.add(info.name);
-    document.getElementById('selected-pgn').textContent = info.name;
+    updateSelectedPgnLabel();
     renderPgnList();
     fetchGames(info.name);
   }
@@ -702,7 +719,7 @@ async function downloadTwic() {
   if (lastName) {
     state.selectedPgn = lastName;
     state.analysisPgns.add(lastName);
-    document.getElementById('selected-pgn').textContent = lastName;
+    updateSelectedPgnLabel();
     renderPgnList();
     fetchGames(lastName);
   }
@@ -1186,7 +1203,7 @@ function renderMatchItem(idx, m) {
     };
     if (switchPgn) {
       state.selectedPgn = sourcePgn;
-      document.getElementById('selected-pgn').textContent = sourcePgn;
+      updateSelectedPgnLabel();
       renderPgnList();
       fetchGames(sourcePgn).then(loadDetail);
     } else {
@@ -1216,6 +1233,7 @@ function renderPgnList() {
     cb.addEventListener('change', () => {
       if (cb.checked) state.analysisPgns.add(p.name);
       else state.analysisPgns.delete(p.name);
+      updateSelectedPgnLabel();
     });
 
     const name = document.createElement('span');
@@ -1229,7 +1247,7 @@ function renderPgnList() {
       // Klik na řádek (mimo checkbox) — aktivuj pro prohlížení partií a zároveň zaškrtni
       state.selectedPgn = p.name;
       state.analysisPgns.add(p.name);
-      document.getElementById('selected-pgn').textContent = p.name;
+      updateSelectedPgnLabel();
       renderPgnList();
       fetchGames(p.name);
     });
