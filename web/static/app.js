@@ -85,8 +85,12 @@ const I18N = {
     select_all_unselect_tooltip: 'Odznačit všechny pro PDF',
     fen_editor_tooltip: 'Otevře Lichess board editor s aktuálním FEN',
     fen_editor_label: '🔗 board editor',
-    twic_select_title: 'Vyber TWIC vydání ke stažení (Ctrl+klik pro více) — theweekinchess.com',
+    twic_select_title: 'Vyber TWIC vydání ke stažení (theweekinchess.com)',
     twic_download_title: 'Stáhnout PGN vybraných TWIC vydání',
+    twic_pick: '— TWIC ze sítě —',
+    twic_pick_count: '{n} vybráno',
+    twic_filter_placeholder: 'filtr (číslo nebo rok)',
+    twic_no_match: 'žádný výsledek',
     twic_loading: 'načítám TWIC seznam...',
     twic_fetch_failed: 'TWIC seznam se nepodařilo stáhnout (zkontroluj internet).',
     twic_download_failed: 'Stažení TWIC se nezdařilo: ',
@@ -167,8 +171,12 @@ const I18N = {
     select_all_unselect_tooltip: 'Deselect all for PDF',
     fen_editor_tooltip: 'Open Lichess board editor with the current FEN',
     fen_editor_label: '🔗 board editor',
-    twic_select_title: 'Pick TWIC issues to download (Ctrl+click for multiple) — theweekinchess.com',
+    twic_select_title: 'Pick TWIC issues to download (theweekinchess.com)',
     twic_download_title: 'Download the PGN of the selected TWIC issues',
+    twic_pick: '— TWIC from the net —',
+    twic_pick_count: '{n} selected',
+    twic_filter_placeholder: 'filter (number or year)',
+    twic_no_match: 'no match',
     twic_loading: 'fetching TWIC list...',
     twic_fetch_failed: 'TWIC list fetch failed (check your internet).',
     twic_download_failed: 'TWIC download failed: ',
@@ -218,6 +226,9 @@ function applyLanguage(lang) {
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     el.setAttribute('title', t(el.dataset.i18nTitle));
   });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
+  });
 
   const langBtn = document.getElementById('lang-toggle');
   if (langBtn) langBtn.textContent = state.lang === 'cs' ? '🌐 CS' : '🌐 EN';
@@ -226,6 +237,11 @@ function applyLanguage(lang) {
   renderRuleUI();
   updateExportPdfButton();
   updateSelectAllButton();
+  if (typeof updateTwicTrigger === 'function') updateTwicTrigger();
+  if (typeof renderTwicList === 'function') {
+    const filterEl = document.getElementById('twic-filter');
+    renderTwicList(filterEl ? filterEl.value : '');
+  }
 }
 
 // -------- Rule definitions (parameter schemas + descriptions) --------
@@ -543,35 +559,84 @@ async function uploadPgn(file) {
   await fetchPgns();
 }
 
+const twicState = {
+  items: [],                  // [{number, date}, ...]
+  selected: new Set(),        // Set<number>
+};
+
 async function fetchTwicList() {
-  const sel = document.getElementById('twic-select');
-  if (!sel) return;
+  const list = document.getElementById('twic-list');
+  if (!list) return;
+  list.innerHTML = `<div class="twic-list-empty">${t('twic_loading')}</div>`;
   try {
     const r = await fetch('/api/twic/list');
-    if (!r.ok) {
-      sel.innerHTML = `<option value="" disabled>${t('twic_fetch_failed')}</option>`;
-      return;
-    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
-    sel.innerHTML = '';
-    for (const it of (data.items || [])) {
-      const opt = document.createElement('option');
-      opt.value = String(it.number);
-      opt.textContent = t('twic_label', { n: it.number, date: it.date });
-      sel.appendChild(opt);
-    }
+    twicState.items = data.items || [];
+    renderTwicList();
   } catch (e) {
     console.warn('TWIC list fetch failed', e);
-    sel.innerHTML = `<option value="" disabled>${t('twic_fetch_failed')}</option>`;
+    list.innerHTML = `<div class="twic-list-empty">${t('twic_fetch_failed')}</div>`;
+  }
+}
+
+function renderTwicList(filter) {
+  const list = document.getElementById('twic-list');
+  if (!list) return;
+  const q = (filter || '').trim().toLowerCase();
+  list.innerHTML = '';
+  let shown = 0;
+  for (const it of twicState.items) {
+    const label = t('twic_label', { n: it.number, date: it.date });
+    if (q && !label.toLowerCase().includes(q) && !String(it.number).includes(q)) continue;
+    shown++;
+    const row = document.createElement('label');
+    if (twicState.selected.has(it.number)) row.classList.add('checked');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = String(it.number);
+    cb.checked = twicState.selected.has(it.number);
+    cb.addEventListener('change', () => {
+      if (cb.checked) twicState.selected.add(it.number);
+      else twicState.selected.delete(it.number);
+      row.classList.toggle('checked', cb.checked);
+      updateTwicTrigger();
+    });
+    const span = document.createElement('span');
+    span.textContent = label;
+    row.appendChild(cb);
+    row.appendChild(span);
+    list.appendChild(row);
+  }
+  if (shown === 0) {
+    list.innerHTML = `<div class="twic-list-empty">${t('twic_no_match')}</div>`;
+  }
+}
+
+function updateTwicTrigger() {
+  const trigger = document.getElementById('twic-trigger-text');
+  const btn = document.getElementById('twic-download');
+  const n = twicState.selected.size;
+  if (trigger) trigger.textContent = n === 0 ? t('twic_pick') : t('twic_pick_count', { n });
+  if (btn) btn.disabled = n === 0;
+}
+
+function toggleTwicPanel(forceOpen) {
+  const panel = document.getElementById('twic-panel');
+  if (!panel) return;
+  const willShow = (forceOpen !== undefined) ? forceOpen : panel.hasAttribute('hidden');
+  if (willShow) {
+    panel.removeAttribute('hidden');
+    const f = document.getElementById('twic-filter');
+    if (f) { f.value = ''; renderTwicList(''); setTimeout(() => f.focus(), 0); }
+  } else {
+    panel.setAttribute('hidden', '');
   }
 }
 
 async function downloadTwic() {
-  const sel = document.getElementById('twic-select');
   const btn = document.getElementById('twic-download');
-  const numbers = Array.from(sel.selectedOptions)
-    .map(o => parseInt(o.value))
-    .filter(n => Number.isFinite(n) && n > 0);
+  const numbers = Array.from(twicState.selected).sort((a, b) => a - b);
   if (numbers.length === 0) return;
 
   const orig = btn.textContent;
@@ -606,8 +671,12 @@ async function downloadTwic() {
     fetchGames(lastName);
   }
 
-  btn.disabled = false;
   btn.textContent = orig;
+  // Vyprázdníme výběr a zavřeme panel, ať je vidět výsledek a další download startuje od nuly.
+  twicState.selected.clear();
+  renderTwicList(document.getElementById('twic-filter')?.value || '');
+  updateTwicTrigger();
+  toggleTwicPanel(false);
 
   if (failures.length > 0) {
     alert(t('twic_download_partial') + '\n' + failures.join('\n'));
@@ -1526,12 +1595,27 @@ function setupEvents() {
     const f = e.target.files[0];
     if (f) uploadPgn(f);
   });
-  const twicSel = document.getElementById('twic-select');
+  const twicTrigger = document.getElementById('twic-trigger');
+  const twicPanel = document.getElementById('twic-panel');
+  const twicFilter = document.getElementById('twic-filter');
   const twicBtn = document.getElementById('twic-download');
-  if (twicSel && twicBtn) {
-    twicSel.addEventListener('change', () => { twicBtn.disabled = twicSel.selectedOptions.length === 0; });
-    twicBtn.addEventListener('click', downloadTwic);
+  if (twicTrigger && twicPanel) {
+    twicTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTwicPanel();
+    });
+    twicPanel.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('click', () => {
+      if (!twicPanel.hasAttribute('hidden')) toggleTwicPanel(false);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !twicPanel.hasAttribute('hidden')) toggleTwicPanel(false);
+    });
   }
+  if (twicFilter) {
+    twicFilter.addEventListener('input', () => renderTwicList(twicFilter.value));
+  }
+  if (twicBtn) twicBtn.addEventListener('click', downloadTwic);
   document.getElementById('nav-start').addEventListener('click', goToStart);
   document.getElementById('nav-forward').addEventListener('click', goForward);
   document.getElementById('nav-back').addEventListener('click', goBack);

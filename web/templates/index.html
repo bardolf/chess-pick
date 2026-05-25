@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>chess-pick</title>
   <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
-  <link rel="stylesheet" href="/static/style.css?v=54" />
+  <link rel="stylesheet" href="/static/style.css?v=55" />
 </head>
 <body>
   <header>
@@ -90,10 +90,20 @@
           <input type="file" id="upload-input" accept=".pgn" />
         </label>
         <div class="twic-picker">
-          <select id="twic-select" multiple size="5"
-                  data-i18n-title="twic_select_title"
-                  title="Vyber TWIC vydání ke stažení (Ctrl+klik pro více)">
-          </select>
+          <div class="twic-multi" id="twic-multi">
+            <button type="button" class="twic-trigger" id="twic-trigger"
+                    data-i18n-title="twic_select_title"
+                    title="Vyber TWIC vydání ke stažení">
+              <span class="twic-trigger-text" id="twic-trigger-text" data-i18n="twic_pick">— TWIC ze sítě —</span>
+              <span class="twic-trigger-arrow">▾</span>
+            </button>
+            <div class="twic-panel" id="twic-panel" hidden>
+              <input type="text" id="twic-filter" class="twic-filter"
+                     data-i18n-placeholder="twic_filter_placeholder"
+                     placeholder="filtr (číslo nebo rok)" />
+              <div class="twic-list" id="twic-list"></div>
+            </div>
+          </div>
           <button id="twic-download"
                   data-i18n-title="twic_download_title"
                   title="Stáhnout PGN vybraných TWIC vydání" disabled>⤓</button>
@@ -162,6 +172,6 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
   <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-  <script src="/static/app.js?v=54"></script>
+  <script src="/static/app.js?v=55"></script>
 </body>
 </html>
