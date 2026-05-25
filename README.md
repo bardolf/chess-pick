@@ -152,7 +152,7 @@ Pozice s **jediným správným tahem** — všechny ostatní výrazně ztrácí.
 Klasický tréninkový vzor „musíš najít přesný tah, jinak pozice padá".
 
 Parametry:
-- `best_max_abs_cp` — po nejlepším tahu zůstává hodnocení pozice „klidné" (|eval| ≤ tolik)
+- `best_max_abs_cp` — po nejlepším tahu zůstává hodnocení pozice stejné (|eval| ≤ tolik)
 - `min_gap_cp` — best musí být o tolik cp lepší než 2. nejlepší (z pohledu hráče)
 - `exclude_captures` — best move nesmí být braní (vyřadí triviální rekapitulace)
 
