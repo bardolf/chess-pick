@@ -491,9 +491,21 @@ body.light #open-in-lichess:hover { background: #3377dd; }
   background: #1a1a1a;
   color: #e0e0e0;
   border: 1px solid #444;
-  padding: 6px 8px;
+  padding: 4px;
   border-radius: 3px;
-  font-size: 0.9em;
+  font-size: 0.85em;
+  font-family: 'Courier New', monospace;
+}
+
+.twic-picker select[multiple] {
+  padding: 0;
+}
+.twic-picker select[multiple] option {
+  padding: 3px 6px;
+}
+.twic-picker select option:checked {
+  background: #4a90e2 linear-gradient(0deg, #4a90e2, #4a90e2);
+  color: #fff;
 }
 
 .twic-picker button {

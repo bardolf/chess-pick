@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>chess-pick</title>
   <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
-  <link rel="stylesheet" href="/static/style.css?v=53" />
+  <link rel="stylesheet" href="/static/style.css?v=54" />
 </head>
 <body>
   <header>
@@ -90,10 +90,13 @@
           <input type="file" id="upload-input" accept=".pgn" />
         </label>
         <div class="twic-picker">
-          <select id="twic-select" data-i18n-title="twic_select_title" title="Vyber TWIC vydání ke stažení">
-            <option value="" data-i18n="twic_placeholder">— TWIC ze sítě —</option>
+          <select id="twic-select" multiple size="5"
+                  data-i18n-title="twic_select_title"
+                  title="Vyber TWIC vydání ke stažení (Ctrl+klik pro více)">
           </select>
-          <button id="twic-download" data-i18n-title="twic_download_title" title="Stáhnout PGN vybraného TWIC vydání" disabled>⤓</button>
+          <button id="twic-download"
+                  data-i18n-title="twic_download_title"
+                  title="Stáhnout PGN vybraných TWIC vydání" disabled>⤓</button>
         </div>
       </div>
       <div class="panel">
@@ -159,6 +162,6 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
   <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-  <script src="/static/app.js?v=53"></script>
+  <script src="/static/app.js?v=54"></script>
 </body>
 </html>
