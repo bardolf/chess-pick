@@ -521,8 +521,7 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int | No
     elif rule_name == "only_move":
         rule = OnlyMoveAvailable(
             best_max_abs_cp=int(params.get("best_max_abs_cp", 150)),
-            second_max_cp=int(params.get("second_max_cp", -200)),
-            min_gap_cp=int(params.get("min_gap_cp", 120)),
+            min_gap_cp=int(params.get("min_gap_cp", 200)),
             exclude_captures=bool(params.get("exclude_captures", True)),
         )
     else:

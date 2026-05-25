@@ -321,11 +321,10 @@ class OnlyMoveAvailable:
     `|best| < 1.5 pawn AND |secondBest| > 2.7 pawn AND best není braní`.
 
     Parametry (vše v centipawnech, z pohledu hráče na tahu):
-    - `best_max_abs_cp` — po nejlepším tahu je pozice „rovná": |best_cp| ≤ tolik
-    - `second_max_cp` — druhý nejlepší tah (a všechny další z multipv) musí
-      hodnotou klesnout pod tuhle hranici (z player POV, takže záporné číslo
-      znamená „ztrátu")
-    - `min_gap_cp` — best − second_best musí být alespoň tolik
+    - `best_max_abs_cp` — po nejlepším tahu zůstává hodnocení pozice „klidné":
+      |best_cp| ≤ tolik (ne triviálně vyhraná ani prohraná pozice)
+    - `min_gap_cp` — nejlepší tah musí být o tolik lepší než druhý nejlepší
+      (best − second_best ≥ tolik). To je jediná podmínka „jedinečnosti".
     - `exclude_captures` — odfiltruje pozice, kde best je braní (= většinou
       triviální rekapitulace)
 
@@ -333,8 +332,7 @@ class OnlyMoveAvailable:
     pořád obsahuje, ať uživatel vidí jestli hráč nejlepší tah trefil.
     """
     best_max_abs_cp: int = 150
-    second_max_cp: int = -200
-    min_gap_cp: int = 120
+    min_gap_cp: int = 200
     exclude_captures: bool = True
 
     def match(self, ctx: PositionContext) -> bool:
@@ -358,8 +356,6 @@ class OnlyMoveAvailable:
         second_cp = second_score.pov(ctx.player).score(mate_score=MATE_SCORE)
 
         if abs(best_cp) > self.best_max_abs_cp:
-            return False
-        if second_cp > self.second_max_cp:
             return False
         if (best_cp - second_cp) < self.min_gap_cp:
             return False

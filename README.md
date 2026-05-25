@@ -151,13 +151,11 @@ Pozice s **jediným správným tahem** — všechny ostatní výrazně ztrácí.
 Klasický tréninkový vzor „musíš najít přesný tah, jinak pozice padá".
 
 Parametry:
-- `best_max_abs_cp` — po nejlepším tahu je pozice rovná (|eval| ≤ tolik)
-- `second_max_cp` — druhý nejlepší tah klesne pod tuto hodnotu (z pohledu hráče)
-- `min_gap_cp` — minimální rozdíl best − 2. best
+- `best_max_abs_cp` — po nejlepším tahu zůstává hodnocení pozice „klidné" (|eval| ≤ tolik)
+- `min_gap_cp` — best musí být o tolik cp lepší než 2. nejlepší (z pohledu hráče)
 - `exclude_captures` — best move nesmí být braní (vyřadí triviální rekapitulace)
 
-Defaultní hodnoty (`|best| ≤ 150`, `2nd ≤ -200`, `gap ≥ 120`) inspirované
-Kotlinovým testem ze sesterského repa s podobnou logikou.
+Defaultní hodnoty: `|best| ≤ 150`, `gap ≥ 200`.
 
 ### Parametry enginu (Stockfish)
 
