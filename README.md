@@ -8,7 +8,7 @@ pozice, které si pak řešíš sám.
 
 ## Co aplikace umí
 
-- 4 hledací pravidla — **Blunder**, **Zwischenzug**, **Struktura/rozestavění**, **Mat (mate in N)**
+- 5 hledacích pravidel — **Blunder**, **Zwischenzug**, **Struktura/rozestavění**, **Mat (mate in N)**, **Only move**
 - Webové UI s šachovnicí, navigací po tazích, PGN browserem, výběrem pravidel
   a streamovanou analýzou (lze kdykoli zastavit)
 - Cache evaluací (`eval_cache.db`) — po prvním běhu jsou opakované analýzy
@@ -117,6 +117,11 @@ Ctrl+C v terminálu server zastaví.
 Pozice, kde hráč zahrál tah ≥ `min_loss_cp` centipawnů horší než nejlepší tah engine.
 Klasické tréninkové „najdi lepší tah" pozice.
 
+Volitelně lze omezit i hodnocení pozice **před** zahraným tahem přes
+`eval_min_cp` / `eval_max_cp` (z pohledu hráče) — užitečné, aby se „blunder"
+nehlásil v už ztracené nebo triviálně vyhrané pozici. Doporučený rozsah pro
+trénink: 150 až 500 cp (hráč má zřetelnou, ne triviální výhodu).
+
 #### Rule 2 — Zwischenzug (Mezitah)
 
 Pozice, kde po soupeřově braní engine doporučuje **non-recapture šach nebo
@@ -139,6 +144,20 @@ Najde forsírované maty délky N. UI umožňuje specifikovat každý jednotliv�
 tah mata zvlášť — typ (šach / braní / promotion) a hodnotu (ano / ne / nezáleží).
 
 ![Konfigurace mate-in-N](doc/img/rule-mate.png)
+
+#### Rule 5 — Only move
+
+Pozice s **jediným správným tahem** — všechny ostatní výrazně ztrácí.
+Klasický tréninkový vzor „musíš najít přesný tah, jinak pozice padá".
+
+Parametry:
+- `best_max_abs_cp` — po nejlepším tahu je pozice rovná (|eval| ≤ tolik)
+- `second_max_cp` — druhý nejlepší tah klesne pod tuto hodnotu (z pohledu hráče)
+- `min_gap_cp` — minimální rozdíl best − 2. best
+- `exclude_captures` — best move nesmí být braní (vyřadí triviální rekapitulace)
+
+Defaultní hodnoty (`|best| ≤ 150`, `2nd ≤ -200`, `gap ≥ 120`) inspirované
+Kotlinovým testem ze sesterského repa s podobnou logikou.
 
 ### Parametry enginu (Stockfish)
 
@@ -164,7 +183,7 @@ Kliknutí na výsledek nahraje pozici na šachovnici nahoře.
 ### PDF export
 
 V hlavičce výstupu zmáčkni 📄 **PDF**. Vygeneruje PDF s 4 diagramy na A4
-stránku + sekce *Solutions* na konci. K dispozici pro Rule 1, 2, 4.
+stránku + sekce *Solutions* na konci. K dispozici pro Rule 1, 2, 4, 5.
 
 Před exportem můžeš jednotlivé nálezy z PDF **vyřadit** odškrtnutím checkboxu
 vlevo u řádku (analýza občas vyplaví falešně pozitivní pozice, které

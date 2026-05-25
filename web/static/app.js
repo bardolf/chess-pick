@@ -32,10 +32,37 @@ const RULE_DEFS = {
         hint: 'Tah je mistake/blunder, pokud je horší o tolik centipawnů nebo víc. 100 cp = 1 pěšec.' },
       { key: 'tie_tolerance_cp', label: 'tie tolerance (cp)', type: 'number', default: 20,
         hint: 'Tahy do této vzdálenosti od top tahu se považují za rovnocenné. Hráč není ve chybě, když zahrál jeden z nich.' },
+      { key: 'eval_min_cp', label: 'min eval před tahem (cp)', type: 'number', default: -100000,
+        hint: 'Filtr na hodnocení pozice před zahraným tahem (z pohledu hráče). -100000 = bez spodní hranice. Doporučeno např. 150 — pozice musí mít zřetelnou výhodu, jinak "blunder" v už ztracené pozici nedává smysl.' },
+      { key: 'eval_max_cp', label: 'max eval před tahem (cp)', type: 'number', default: 100000,
+        hint: 'Horní mez. 100000 = bez horní hranice. Doporučeno např. 500 — pozice nesmí být už triviálně vyhraná.' },
       { key: 'depth', label: 'depth', type: 'number', default: 16,
         hint: 'Hloubka prohledávání Stockfishe (počet půltahů). Vyšší = přesnější, pomalejší.' },
       { key: 'multipv', label: 'multipv', type: 'number', default: 3,
         hint: 'Kolik nejlepších linií engine počítá. Vyšší = bezpečnější tie detekce, pomalejší.' },
+    ],
+  },
+  only_move: {
+    label: 'Rule 5 — Only move (jediný správný tah)',
+    description:
+      'Hledá pozice, kde existuje jediný správný tah — po něm je pozice rovná, ' +
+      'ale druhý nejlepší (a všechny další) výrazně ztrácí. Klasická tréninková ' +
+      '„najdi přesný tah" kategorie. Best move nesmí být braní (vyřadí triviální rekapitulace).',
+    params: [
+      { key: 'min_elo', label: 'min Elo obou hráčů', type: 'number', default: 0,
+        hint: '0 = bez filtru (všechny partie). Jinak partie projde jen pokud má oba hráče s Elo ≥ tato hodnota.' },
+      { key: 'best_max_abs_cp', label: '|best| max (cp)', type: 'number', default: 150,
+        hint: 'Po nejlepším tahu je pozice „rovná" — |eval| ≤ tato hodnota (z pohledu hráče). 150 = ±1.5 pěšce.' },
+      { key: 'second_max_cp', label: '2. nejlepší max (cp)', type: 'number', default: -200,
+        hint: 'Druhý nejlepší tah musí klesnout pod tuto hodnotu (z pohledu hráče). -200 = 2. nejlepší ztrácí aspoň 2 pěšce.' },
+      { key: 'min_gap_cp', label: 'min gap (cp)', type: 'number', default: 120,
+        hint: 'Minimální rozdíl best − 2. best (z pohledu hráče). 120 = best musí být o 1.2 pěšce lepší.' },
+      { key: 'exclude_captures', label: 'best nesmí být braní', type: 'checkbox', default: true,
+        hint: 'Vyřadí pozice, kde jediný správný tah je braní — typicky triviální rekapitulace.' },
+      { key: 'depth', label: 'depth', type: 'number', default: 16,
+        hint: 'Hloubka prohledávání Stockfishe. Vyšší = přesnější, pomalejší.' },
+      { key: 'multipv', label: 'multipv', type: 'number', default: 3,
+        hint: 'Kolik nejlepších linií engine počítá (potřebujeme alespoň 2 pro porovnání).' },
     ],
   },
   zwischenzug: {
@@ -242,12 +269,12 @@ function selectedMatches() {
 function updateExportPdfButton() {
   const btn = document.getElementById('btn-export-pdf');
   if (!btn) return;
-  const allowed = ['blunder', 'zwischenzug', 'mate'].includes(state.selectedRule);
+  const allowed = ['blunder', 'zwischenzug', 'mate', 'only_move'].includes(state.selectedRule);
   const total = currentMatches.length;
   const sel = selectedMatches().length;
   btn.disabled = !(allowed && sel > 0);
   if (!allowed) {
-    btn.title = 'PDF export není pro toto pravidlo k dispozici (jen rule 1, 2, 4)';
+    btn.title = 'PDF export není pro toto pravidlo k dispozici (jen rule 1, 2, 4, 5)';
   } else if (total === 0) {
     btn.title = 'Po spuštění analýzy ti tu nabídnu PDF s diagramy';
   } else {
@@ -377,8 +404,8 @@ function drawBoardOnPdf(pdf, fen, x, y, size) {
 async function exportPdf() {
   const items = selectedMatches();
   if (items.length === 0) return;
-  if (!['blunder', 'zwischenzug', 'mate'].includes(state.selectedRule)) {
-    alert('PDF export není pro toto pravidlo k dispozici (jen Rule 1 — Blunder, Rule 2 — Zwischenzug a Rule 4 — Mate).');
+  if (!['blunder', 'zwischenzug', 'mate', 'only_move'].includes(state.selectedRule)) {
+    alert('PDF export není pro toto pravidlo k dispozici (jen Rule 1 — Blunder, Rule 2 — Zwischenzug, Rule 4 — Mate a Rule 5 — Only Move).');
     return;
   }
   const btn = document.getElementById('btn-export-pdf');

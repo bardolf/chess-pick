@@ -292,14 +292,80 @@ class PlayedMoveLossAtLeast:
     """Zahraný tah je o ≥ min_loss_cp centipawnů horší než nejlepší tah.
     Tahy do tie_tolerance_cp od nejlepšího jsou považovány za rovnocenné a hráč
     není ve „chybě", pokud zahrál kterýkoliv z nich.
+
+    `eval_min_cp` / `eval_max_cp` filtruje pozice, kde má smysl mluvit o blunderu:
+    Kotlinová varianta tohoto pravidla používá interval (150, 500) cp z pohledu
+    hráče — hráč má zřetelnou, ale ne triviálně vyhranou výhodu, kterou může ztratit.
+    Defaultně je interval velmi široký = chování beze změny.
     """
     min_loss_cp: int = 100
     tie_tolerance_cp: int = 20
+    eval_min_cp: int = -100_000   # cp_before (player POV) musí být ≥ tolik
+    eval_max_cp: int = 100_000    # cp_before (player POV) musí být ≤ tolik
 
     def match(self, ctx: PositionContext) -> bool:
+        cp_before = ctx.cp_before()
+        if cp_before < self.eval_min_cp or cp_before > self.eval_max_cp:
+            return False
         if ctx.played_move in ctx.acceptable_first_moves(self.tie_tolerance_cp):
             return False
         return ctx.cp_loss() >= self.min_loss_cp
+
+
+@dataclass
+class OnlyMoveAvailable:
+    """Pozice s **jediným správným tahem** — všechny ostatní výrazně ztrácí.
+
+    Klasická tréninková kategorie z Dvořeckého: „musíš najít přesně tenhle tah,
+    jinak pozice padá". Inspirováno Kotlinovým testem (Rule 3):
+    `|best| < 1.5 pawn AND |secondBest| > 2.7 pawn AND best není braní`.
+
+    Parametry (vše v centipawnech, z pohledu hráče na tahu):
+    - `best_max_abs_cp` — po nejlepším tahu je pozice „rovná": |best_cp| ≤ tolik
+    - `second_max_cp` — druhý nejlepší tah (a všechny další z multipv) musí
+      hodnotou klesnout pod tuhle hranici (z player POV, takže záporné číslo
+      znamená „ztrátu")
+    - `min_gap_cp` — best − second_best musí být alespoň tolik
+    - `exclude_captures` — odfiltruje pozice, kde best je braní (= většinou
+      triviální rekapitulace)
+
+    Pozici emituje bez ohledu na to, co hráč zahrál — match data ale `played`
+    pořád obsahuje, ať uživatel vidí jestli hráč nejlepší tah trefil.
+    """
+    best_max_abs_cp: int = 150
+    second_max_cp: int = -200
+    min_gap_cp: int = 120
+    exclude_captures: bool = True
+
+    def match(self, ctx: PositionContext) -> bool:
+        infos = ctx.analyse_before()
+        if len(infos) < 2:
+            return False
+
+        best_info, second_info = infos[0], infos[1]
+        best_pv = best_info.get("pv", [])
+        second_pv = second_info.get("pv", [])
+        if not best_pv or not second_pv:
+            return False
+
+        best_score = best_info["score"]
+        second_score = second_info["score"]
+        # Mat skipujeme — to není „only move", to je matová sekvence (řeší Rule 4)
+        if best_score.is_mate() or second_score.is_mate():
+            return False
+
+        best_cp = best_score.pov(ctx.player).score(mate_score=MATE_SCORE)
+        second_cp = second_score.pov(ctx.player).score(mate_score=MATE_SCORE)
+
+        if abs(best_cp) > self.best_max_abs_cp:
+            return False
+        if second_cp > self.second_max_cp:
+            return False
+        if (best_cp - second_cp) < self.min_gap_cp:
+            return False
+        if self.exclude_captures and ctx.board.is_capture(best_pv[0]):
+            return False
+        return True
 
 
 @dataclass

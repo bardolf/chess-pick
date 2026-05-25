@@ -46,6 +46,7 @@ print(f"[chess-pick]   exists()    = {STOCKFISH_PATH.exists()}", flush=True)
 print(f"[chess-pick]   is_file()   = {STOCKFISH_PATH.is_file()}", flush=True)
 from filters import (
     MinElo,
+    OnlyMoveAvailable,
     OpeningPositionMatches,
     PawnStructureMatches,
     PlayedMoveLossAtLeast,
@@ -368,7 +369,7 @@ def _format_match_pgn(
     moves: list[str] = []
     if rule == "mate" and played:
         moves = played.split()
-    elif rule in ("blunder", "zwischenzug") and played:
+    elif rule in ("blunder", "zwischenzug", "only_move") and played:
         moves = [played]
 
     move_text = ""
@@ -407,7 +408,7 @@ def analyze(req: AnalyzeRequest) -> StreamingResponse:
     if req.rule == "pawn_structure":
         limit = req.limit or 500
         gen = _stream_pawn_structure(pgn_path, req.params, limit)
-    elif req.rule in ("blunder", "zwischenzug"):
+    elif req.rule in ("blunder", "zwischenzug", "only_move"):
         limit = req.limit or 50
         gen = _stream_engine(pgn_path, req.rule, req.params, limit, req.engine)
     elif req.rule == "mate":
@@ -514,6 +515,15 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int, eng
         rule = PlayedMoveLossAtLeast(
             min_loss_cp=int(params.get("min_loss_cp", 100)),
             tie_tolerance_cp=int(params.get("tie_tolerance_cp", 20)),
+            eval_min_cp=int(params.get("eval_min_cp", -100_000)),
+            eval_max_cp=int(params.get("eval_max_cp", 100_000)),
+        )
+    elif rule_name == "only_move":
+        rule = OnlyMoveAvailable(
+            best_max_abs_cp=int(params.get("best_max_abs_cp", 150)),
+            second_max_cp=int(params.get("second_max_cp", -200)),
+            min_gap_cp=int(params.get("min_gap_cp", 120)),
+            exclude_captures=bool(params.get("exclude_captures", True)),
         )
     else:
         rule = ZwischenzugAvailable(
