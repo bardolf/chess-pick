@@ -526,6 +526,9 @@ body.light #open-in-lichess:hover { background: #3377dd; }
   flex-direction: column;
   max-height: 320px;
 }
+/* Důležité: display: flex výše má stejnou specifičnost jako [hidden] z UA
+   stylesheetu, takže by [hidden] panel jinak neskryl. Vynutíme display: none. */
+.twic-panel[hidden] { display: none; }
 
 .twic-filter {
   background: #111;
