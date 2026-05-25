@@ -81,6 +81,9 @@ Zdroje partií:
 Místo ručního kopírování PGN do `twic/` lze taky použít **„Upload PGN"**
 v UI (prostřední sloupec nahoře) — soubor se uloží automaticky.
 
+Aplikace umí i **stáhnout TWIC vydání rovnou ze sítě** (viz [TWIC picker](#twic-picker))
+— nemusíš ručně chodit na theweekinchess.com.
+
 ## Spuštění
 
 Nejjednodušší — dvojklik na **`start.bat`** v kořeni projektu (nebo
@@ -106,8 +109,36 @@ Ctrl+C v terminálu server zastaví.
 
 - **Vlevo** — šachovnice, navigace po tazích (⏮ ◀ ▶ ⏭), FEN aktuální pozice,
   odkaz na Lichess analýzu, výstup analýzy + PDF / PGN export
-- **Uprostřed** — seznam PGN souborů z `twic/`, partie v souboru, detail partie
+- **Uprostřed** — Upload PGN / TWIC picker, seznam PGN souborů (se zaškrtávátky
+  pro výběr do analýzy), partie ve vybraném souboru, detail partie
 - **Vpravo** — výběr pravidla, parametry pravidla, ▶ Analyze / ■ Stop
+
+### TWIC picker
+
+Místo ručního stahování ZIP z theweekinchess.com má aplikace zabudovaný
+**TWIC picker** vedle „Upload PGN". Otevře combo s checkboxy:
+
+![TWIC picker](doc/img/twic.png)
+
+- **Filter** nahoře — napiš číslo (`1644`) nebo rok (`2026`), seznam se zúží
+- **Checkbox u řádku** — vyber 1 nebo víc TWIC vydání (`Ctrl/Shift` nepotřebuješ)
+- **⤓ tlačítko** vpravo — postupně stáhne všechny zaškrtnuté ZIP archivy
+  z theweekinchess.com, rozbalí .pgn dovnitř `twic/`, a poslední z nich
+  rovnou nahodí jako aktivní
+
+Index TWIC vydání (#920 — nejnovější) se cachuje na disk v
+`data/twic_index.json` na 6 hodin. Po výpadku sítě fallbackuje na poslední
+úspěšný snapshot — pořád můžeš pracovat.
+
+### Vícenásobný PGN výběr
+
+Každý PGN v prostředním sloupci má vlevo **checkbox**. Klik na jméno
+souboru ho aktivuje pro prohlížení (vlevo se objeví jeho partie) **a
+zároveň ho zaškrtne pro analýzu**. Pokud chceš analyzovat víc PGN
+souborů najednou, prostě je zaškrtni — Analyze pak projede sekvenčně
+přes všechny. V hlavičce výstupu se objeví prefix `PGN k/N [twic1640.pgn]`
+ať vidíš pokrok, a každý nález si pamatuje **z kterého PGN pochází**
+(klik na výsledek přepne viewer na ten správný soubor).
 
 ### Pravidla
 
