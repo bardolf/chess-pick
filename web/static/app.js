@@ -663,6 +663,20 @@ async function downloadTwic() {
     }
   }
 
+  // Nejdřív vyresetuj UI — i kdyby cokoli pod tím selhalo, výběr je čistý.
+  btn.textContent = orig;
+  twicState.selected.clear();
+  // Odznač vizuálně všechny řádky (defenzivně — pro případ, že by re-render nestihl).
+  document.querySelectorAll('#twic-list label').forEach(row => {
+    row.classList.remove('checked');
+    const cb = row.querySelector('input[type=checkbox]');
+    if (cb) cb.checked = false;
+  });
+  const filterEl = document.getElementById('twic-filter');
+  renderTwicList(filterEl ? filterEl.value : '');
+  updateTwicTrigger();
+  toggleTwicPanel(false);
+
   await fetchPgns();
   if (lastName) {
     state.selectedPgn = lastName;
@@ -670,13 +684,6 @@ async function downloadTwic() {
     renderPgnList();
     fetchGames(lastName);
   }
-
-  btn.textContent = orig;
-  // Vyprázdníme výběr a zavřeme panel, ať je vidět výsledek a další download startuje od nuly.
-  twicState.selected.clear();
-  renderTwicList(document.getElementById('twic-filter')?.value || '');
-  updateTwicTrigger();
-  toggleTwicPanel(false);
 
   if (failures.length > 0) {
     alert(t('twic_download_partial') + '\n' + failures.join('\n'));
