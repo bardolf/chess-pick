@@ -9,7 +9,8 @@
 
 const state = {
   pgns: [],
-  selectedPgn: null,
+  selectedPgn: null,                 // aktivně zobrazený PGN (jeho partie v prostředku)
+  analysisPgns: new Set(),           // PGN soubory zaškrtnuté pro Analyze (může jich být víc)
   games: [],
   selectedGameIdx: null,
   gameDetail: null,
@@ -69,7 +70,9 @@ const I18N = {
     no_pgn_selected: 'Nejdřív vyber PGN soubor (dvojklik na seznam vlevo).',
     error_prefix: 'Chyba: ',
     no_results_yet: 'Žádné výsledky.',
-    pgn_list_click: 'Klikni pro načtení partií',
+    pgn_list_click: 'Klikni pro načtení partií (a zaškrtnutí pro analýzu)',
+    pgn_include_for_analysis: 'Zahrnout do analýzy',
+    rule_header_multi: 'PGN {i}/{total} [{pgn}]',
     bubble_include: 'Zahrnout do PDF',
     bubble_click: 'Klikni pro načtení partie a skok na tuto pozici',
     pdf_export_progress: '⏳ PDF',
@@ -155,7 +158,9 @@ const I18N = {
     no_pgn_selected: 'Pick a PGN file first (double-click in the middle list).',
     error_prefix: 'Error: ',
     no_results_yet: 'No matches.',
-    pgn_list_click: 'Click to load games',
+    pgn_list_click: 'Click to load games (and select for analysis)',
+    pgn_include_for_analysis: 'Include in analysis',
+    rule_header_multi: 'PGN {i}/{total} [{pgn}]',
     bubble_include: 'Include in PDF',
     bubble_click: 'Click to load this game and jump to this position',
     pdf_export_progress: '⏳ PDF',
@@ -527,6 +532,14 @@ function updateMoveCounter() {
 async function fetchPgns() {
   const r = await fetch('/api/pgns');
   state.pgns = await r.json();
+  // Auto-select: pokud nemáme nic aktivního a nějaký PGN je k dispozici,
+  // vezmi první. Zaškrtneme ho i pro analýzu, ať Analyze rovnou funguje.
+  if (!state.selectedPgn && state.pgns.length > 0) {
+    state.selectedPgn = state.pgns[0].name;
+    state.analysisPgns.add(state.selectedPgn);
+    document.getElementById('selected-pgn').textContent = state.selectedPgn;
+    fetchGames(state.selectedPgn);
+  }
   renderPgnList();
 }
 
@@ -556,7 +569,15 @@ async function uploadPgn(file) {
     alert('Upload selhal: ' + await r.text());
     return;
   }
+  const info = await r.json();
   await fetchPgns();
+  if (info?.name) {
+    state.selectedPgn = info.name;
+    state.analysisPgns.add(info.name);
+    document.getElementById('selected-pgn').textContent = info.name;
+    renderPgnList();
+    fetchGames(info.name);
+  }
 }
 
 const twicState = {
@@ -680,6 +701,7 @@ async function downloadTwic() {
   await fetchPgns();
   if (lastName) {
     state.selectedPgn = lastName;
+    state.analysisPgns.add(lastName);
     document.getElementById('selected-pgn').textContent = lastName;
     renderPgnList();
     fetchGames(lastName);
@@ -993,11 +1015,13 @@ async function exportPdf() {
 }
 
 async function runAnalyze() {
-  if (!state.selectedPgn) {
+  const pgnList = Array.from(state.analysisPgns).sort();
+  if (pgnList.length === 0) {
     alert(t('no_pgn_selected'));
     return;
   }
   const params = collectParams();
+  const engine = collectEngineParams();
   const btn = document.getElementById('btn-analyze');
   const stopBtn = document.getElementById('btn-stop');
   const status = document.getElementById('analyze-status');
@@ -1014,80 +1038,99 @@ async function runAnalyze() {
   updateSelectAllButton();
   let matchCount = 0;
   const startTime = Date.now();
+  let aborted = false;
+  let lastError = null;
 
   try {
-    const r = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rule: state.selectedRule,
-        pgn: state.selectedPgn,
-        params,
-        engine: collectEngineParams(),
-      }),
-      signal: currentAbortController.signal,
-    });
-    if (!r.ok) {
-      out.innerHTML = '<div class="result-empty">' + escape(t('error_prefix') + (await r.text())) + '</div>';
-      return;
-    }
-
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        let msg;
-        try { msg = JSON.parse(line); } catch { continue; }
-        matchCount = handleStreamMessage(msg, matchCount);
+    for (let i = 0; i < pgnList.length; i++) {
+      if (aborted) break;
+      const pgn = pgnList[i];
+      // Označíme z kterého PGN právě čteme — message handler to přilepí na každý match.
+      currentAnalysisPgn = pgn;
+      const prefix = pgnList.length > 1 ? t('rule_header_multi', { i: i + 1, total: pgnList.length, pgn }) + ' · ' : '';
+      try {
+        const r = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rule: state.selectedRule,
+            pgn,
+            params,
+            engine,
+          }),
+          signal: currentAbortController.signal,
+        });
+        if (!r.ok) {
+          lastError = t('error_prefix') + (await r.text());
+          continue;
+        }
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            let msg;
+            try { msg = JSON.parse(line); } catch { continue; }
+            matchCount = handleStreamMessage(msg, matchCount, prefix);
+          }
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') { aborted = true; break; }
+        lastError = e.message;
       }
     }
-    status.textContent = t('status_done', { n: matchCount, sec: ((Date.now() - startTime) / 1000).toFixed(1) });
-  } catch (e) {
-    if (e.name === 'AbortError') {
+    if (aborted) {
       status.textContent = t('status_stopped', { n: matchCount });
       const h = document.getElementById('result-header');
       if (h) h.textContent = t('rule_header_stopped', { n: matchCount });
+    } else if (lastError && matchCount === 0) {
+      out.innerHTML = '<div class="result-empty">' + escape(lastError) + '</div>';
     } else {
-      out.innerHTML = '<div class="result-empty">' + escape(t('error_prefix') + e.message) + '</div>';
+      status.textContent = t('status_done', { n: matchCount, sec: ((Date.now() - startTime) / 1000).toFixed(1) });
     }
   } finally {
+    currentAnalysisPgn = null;
     btn.disabled = false;
     stopBtn.disabled = true;
     currentAbortController = null;
   }
 }
 
+let currentAnalysisPgn = null;
+
 function stopAnalyze() {
   if (currentAbortController) currentAbortController.abort();
 }
 
-function handleStreamMessage(msg, matchCount) {
+function handleStreamMessage(msg, matchCount, prefix) {
   const out = document.getElementById('output-area');
   const h = document.getElementById('result-header');
+  prefix = prefix || '';
   if (msg.type === 'start') {
-    if (h) h.textContent = t('rule_header_start', { rule: msg.rule });
+    if (h) h.textContent = prefix + t('rule_header_start', { rule: msg.rule });
   } else if (msg.type === 'progress') {
-    if (h) h.textContent = t('rule_header_progress', { games: msg.games_scanned, matches: msg.matches_found });
+    if (h) h.textContent = prefix + t('rule_header_progress', { games: msg.games_scanned, matches: msg.matches_found });
   } else if (msg.type === 'match') {
     matchCount++;
     msg.data.selected = true;
+    // U multi-PGN analýzy si pamatujeme zdrojový PGN — match click pak otevře správný soubor.
+    msg.data.pgn_name = currentAnalysisPgn;
     currentMatches.push(msg.data);
     updateExportPdfButton();
     updateSelectAllButton();
     const item = renderMatchItem(matchCount, msg.data);
     out.appendChild(item);
-    if (h) h.textContent = t('rule_header_running', { n: matchCount });
+    if (h) h.textContent = prefix + t('rule_header_running', { n: matchCount });
   } else if (msg.type === 'done') {
     if (h) {
       const scanned = msg.games_scanned !== undefined ? t('games_scanned_suffix', { n: msg.games_scanned }) : '';
-      h.textContent = t('rule_header_done', { scanned, matches: msg.matches_total });
+      h.textContent = prefix + t('rule_header_done', { scanned, matches: msg.matches_total });
     }
   } else if (msg.type === 'error') {
     out.innerHTML = '<div class="result-empty">' + escape(t('error_prefix') + msg.message) + '</div>';
@@ -1130,12 +1173,24 @@ function renderMatchItem(idx, m) {
   body.addEventListener('click', () => {
     const gi = Number(item.dataset.gameIdx);
     const ply = Number(item.dataset.ply);
-    if (gi >= 0) {
-      state.selectedGameIdx = gi;
-      fetchGameDetail(state.selectedPgn, gi).then(() => {
+    if (gi < 0) return;
+    state.selectedGameIdx = gi;
+    // Pro multi-PGN analýzu match.pgn_name říká z kterého souboru pochází.
+    const sourcePgn = m.pgn_name || state.selectedPgn;
+    const switchPgn = sourcePgn && sourcePgn !== state.selectedPgn;
+    const loadDetail = () => {
+      fetchGameDetail(sourcePgn, gi).then(() => {
         state.currentMoveIdx = ply;
         applyCurrentPosition();
       });
+    };
+    if (switchPgn) {
+      state.selectedPgn = sourcePgn;
+      document.getElementById('selected-pgn').textContent = sourcePgn;
+      renderPgnList();
+      fetchGames(sourcePgn).then(loadDetail);
+    } else {
+      loadDetail();
     }
   });
   item.appendChild(body);
@@ -1149,11 +1204,31 @@ function renderPgnList() {
   ul.innerHTML = '';
   for (const p of state.pgns) {
     const li = document.createElement('li');
-    li.textContent = `${p.name} (${p.size_kb} KB)`;
     if (p.name === state.selectedPgn) li.classList.add('selected');
     li.title = t('pgn_list_click');
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'pgn-checkbox';
+    cb.checked = state.analysisPgns.has(p.name);
+    cb.title = t('pgn_include_for_analysis');
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      if (cb.checked) state.analysisPgns.add(p.name);
+      else state.analysisPgns.delete(p.name);
+    });
+
+    const name = document.createElement('span');
+    name.className = 'pgn-name';
+    name.textContent = `${p.name} (${p.size_kb} KB)`;
+
+    li.appendChild(cb);
+    li.appendChild(name);
+
     li.addEventListener('click', () => {
+      // Klik na řádek (mimo checkbox) — aktivuj pro prohlížení partií a zároveň zaškrtni
       state.selectedPgn = p.name;
+      state.analysisPgns.add(p.name);
       document.getElementById('selected-pgn').textContent = p.name;
       renderPgnList();
       fetchGames(p.name);
