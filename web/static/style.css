@@ -263,6 +263,11 @@ main.three-col {
   max-width: min(1000px, 50vh);
   align-self: center;
   flex: 0 0 auto;
+  /* Když chessboard.js neviděl resize včas, figurky uvnitř mohou skončit
+     s absolutní pozicí mimo nový boundary. overflow: hidden je defenzivní
+     pojistka, aby nevyteklo nic ven (typicky 1. řadu vidět pod navigací). */
+  position: relative;
+  overflow: hidden;
 }
 
 .board-nav {

@@ -1875,7 +1875,26 @@ function setupEvents() {
   });
 
   setupResizers();
-  window.addEventListener('resize', () => board && board.resize());
+  // Debounce resize → board.resize(); jeden rAF stačí na to, aby se CSS layout
+  // dopočítal (max-width: min(...) s vh jednotkami se přepočítá po reflow)
+  // a teprve potom chessboard.js znovu změří svůj container.
+  let _resizeRaf = 0;
+  const scheduleBoardResize = () => {
+    if (_resizeRaf) cancelAnimationFrame(_resizeRaf);
+    _resizeRaf = requestAnimationFrame(() => {
+      _resizeRaf = 0;
+      if (board) {
+        board.resize();
+        // Po resize navíc překreslíme pozici, aby se figurky vrátily na svá
+        // místa i v případě, že chessboard.js zapomněl posunout některé.
+        const fen = state.gameDetail && state.gameDetail.fens
+          ? state.gameDetail.fens[state.currentMoveIdx]
+          : null;
+        if (fen) board.position(fen, false);
+      }
+    });
+  };
+  window.addEventListener('resize', scheduleBoardResize);
 }
 
 // -------- Resizable columns --------
