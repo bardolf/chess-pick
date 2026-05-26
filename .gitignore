@@ -11,3 +11,6 @@ twic/*.pgn
 
 # Runtime cache TWIC indexu (regeneruje se z theweekinchess.com)
 data/twic_index.json
+
+# Osobní materiály ke školní zprávě z praxe — nepatří na public GitHub
+zprava_praxe/
