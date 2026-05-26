@@ -1198,30 +1198,38 @@ function formatSeconds(s) {
   return (s / 3600).toFixed(2) + ' h';
 }
 
+function formatMnps(n) {
+  // NPS vždy v jednotce Mn/s (milionů uzlů za sekundu), 2 desetinná místa.
+  // null = málo dat → pomlčka.
+  if (n == null) return t('stats_no_data');
+  return (n / 1e6).toFixed(2);
+}
+
 function renderEngineStats(data) {
   const el = document.getElementById('engine-stats');
   if (!el) return;
   el.hidden = false;
   const w = data.windows || {};
-  const parts = [];
-  parts.push(
-    `<span class="stat-group"><span class="stat-label">${t('stats_total')}</span>` +
+
+  // ∑ — kumulativní součty
+  const sumPart =
+    `<span class="stat-group">∑ ` +
     `<span class="stat-value">${formatNodes(data.total_nodes)}</span> ${t('stats_nodes')}` +
     ` / <span class="stat-value">${data.total_positions}</span> ${t('stats_positions')}` +
-    ` / <span class="stat-value">${formatSeconds(data.total_engine_time_s)}</span></span>`
-  );
-  parts.push(
-    `<span class="stat-group"><span class="stat-label">${t('stats_lifetime')}</span>` +
-    `<span class="stat-value">${formatNodes(data.lifetime_nps)}</span> nps</span>`
-  );
-  for (const k of ['1m', '5m', '30m', '1h']) {
-    const v = w[k];
-    parts.push(
-      `<span class="stat-group"><span class="stat-label">${t('stats_window', { w: k })}</span>` +
-      `<span class="stat-value">${formatNodes(v)}</span> nps</span>`
-    );
-  }
-  el.innerHTML = parts.join('');
+    ` / <span class="stat-value">${formatSeconds(data.total_engine_time_s)}</span></span>`;
+
+  // ⌀ — průměr od startu
+  const avgPart =
+    `<span class="stat-group">⌀ ` +
+    `<span class="stat-value">${formatMnps(data.lifetime_nps)}</span> Mn/s</span>`;
+
+  // 1m X - 5m Y - 30m Z - 1h W Mn/s
+  const winInner = ['1m', '5m', '30m', '1h']
+    .map(k => `<span class="stat-label">${k}</span> <span class="stat-value">${formatMnps(w[k])}</span>`)
+    .join(' - ');
+  const winPart = `<span class="stat-group">${winInner} Mn/s</span>`;
+
+  el.innerHTML = sumPart + avgPart + winPart;
 }
 
 function clearEngineStats() {

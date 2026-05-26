@@ -395,7 +395,7 @@ body.light #open-in-lichess:hover { background: #3377dd; }
   align-items: center;
 }
 .engine-stats[hidden] { display: none; }
-.engine-stats .stat-label { color: #7f96ad; margin-right: 4px; }
+.engine-stats .stat-label { color: #7f96ad; }
 .engine-stats .stat-value { color: #e0e8f0; font-weight: 600; }
 .engine-stats .stat-group { white-space: nowrap; }
 
