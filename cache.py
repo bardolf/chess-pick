@@ -92,11 +92,16 @@ class EvalCache:
     Pro pozici na hloubce D čteme všechny řádky a vrátíme prvních N podle multipv.
     """
 
+    # Po kolika engine missech commitnout. Vyšší = méně fsync overhead při
+    # velkých runech, ale větší ztráta při crashi (znovuanalýza max N pozic).
+    DEFAULT_COMMIT_EVERY = 50
+
     def __init__(
         self,
         db_path: Path,
         engine: chess.engine.SimpleEngine,
         perf: Optional[EnginePerfTracker] = None,
+        commit_every: int = DEFAULT_COMMIT_EVERY,
     ) -> None:
         self._engine = engine
         self.perf = perf or EnginePerfTracker()
@@ -117,9 +122,20 @@ class EvalCache:
         self._conn.commit()
         self.hits = 0
         self.misses = 0
+        self._commit_every = max(1, int(commit_every))
+        self._uncommitted = 0
+
+    def flush(self) -> None:
+        """Commitne všechny pending zápisy (i pokud nebylo dosaženo `commit_every`)."""
+        if self._uncommitted > 0:
+            self._conn.commit()
+            self._uncommitted = 0
 
     def close(self) -> None:
-        self._conn.close()
+        try:
+            self.flush()
+        finally:
+            self._conn.close()
 
     def __enter__(self) -> "EvalCache":
         return self
@@ -161,7 +177,12 @@ class EvalCache:
             "VALUES (?,?,?,?,?,?)",
             list(_rows_for_infos(fen, depth, infos)),
         )
-        self._conn.commit()
+        # Batchovaný commit — fsync jen každých N missů, jinak vidím
+        # 0.5-1 ms fsync overhead na každou analyzovanou pozici.
+        self._uncommitted += 1
+        if self._uncommitted >= self._commit_every:
+            self._conn.commit()
+            self._uncommitted = 0
         return infos
 
 
