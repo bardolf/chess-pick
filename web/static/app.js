@@ -7,10 +7,30 @@
 //   - currentMoveIdx: 0 = initial position, k = after k-th half-move
 //   - selectedRule: 'blunder' | 'zwischenzug' | 'pawn_structure'
 
+const ANALYSIS_PGNS_KEY = 'chess-pick:analysisPgns';
+
+function loadAnalysisPgnsFromStorage() {
+  const set = new Set();
+  try {
+    const raw = localStorage.getItem(ANALYSIS_PGNS_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) for (const n of arr) if (typeof n === 'string') set.add(n);
+    }
+  } catch {}
+  return set;
+}
+
+function saveAnalysisPgns() {
+  try {
+    localStorage.setItem(ANALYSIS_PGNS_KEY, JSON.stringify(Array.from(state.analysisPgns)));
+  } catch {}
+}
+
 const state = {
   pgns: [],
-  selectedPgn: null,                 // aktivně zobrazený PGN (jeho partie v prostředku)
-  analysisPgns: new Set(),           // PGN soubory zaškrtnuté pro Analyze (může jich být víc)
+  selectedPgn: null,                          // aktivně zobrazený PGN (jeho partie v prostředku)
+  analysisPgns: loadAnalysisPgnsFromStorage(), // PGN soubory zaškrtnuté pro Analyze (persist přes refresh)
   games: [],
   selectedGameIdx: null,
   gameDetail: null,
@@ -563,11 +583,32 @@ function updateSelectedPgnLabel() {
 async function fetchPgns() {
   const r = await fetch('/api/pgns');
   state.pgns = await r.json();
-  // Auto-select: pokud nemáme nic aktivního a nějaký PGN je k dispozici,
-  // vezmi první. Zaškrtneme ho i pro analýzu, ať Analyze rovnou funguje.
+  // Odstraníme z analysisPgns položky, které už nejsou na disku
+  // (např. uživatel ručně smazal soubor z twic/).
+  const available = new Set(state.pgns.map(p => p.name));
+  let pruned = false;
+  for (const name of Array.from(state.analysisPgns)) {
+    if (!available.has(name)) {
+      state.analysisPgns.delete(name);
+      pruned = true;
+    }
+  }
+  if (pruned) saveAnalysisPgns();
+
+  // Auto-select: pokud nemáme nic aktivního, preferuj první obnovenou položku
+  // z analysisPgns. Jinak první dostupný PGN (a zaškrtni ho).
   if (!state.selectedPgn && state.pgns.length > 0) {
-    state.selectedPgn = state.pgns[0].name;
-    state.analysisPgns.add(state.selectedPgn);
+    let preferred = null;
+    for (const name of state.analysisPgns) {
+      if (available.has(name)) { preferred = name; break; }
+    }
+    if (preferred) {
+      state.selectedPgn = preferred;
+    } else {
+      state.selectedPgn = state.pgns[0].name;
+      state.analysisPgns.add(state.selectedPgn);
+      saveAnalysisPgns();
+    }
     fetchGames(state.selectedPgn);
   }
   updateSelectedPgnLabel();
@@ -605,6 +646,7 @@ async function uploadPgn(file) {
   if (info?.name) {
     state.selectedPgn = info.name;
     state.analysisPgns.add(info.name);
+    saveAnalysisPgns();
     updateSelectedPgnLabel();
     renderPgnList();
     fetchGames(info.name);
@@ -733,6 +775,7 @@ async function downloadTwic() {
   if (lastName) {
     state.selectedPgn = lastName;
     state.analysisPgns.add(lastName);
+    saveAnalysisPgns();
     updateSelectedPgnLabel();
     renderPgnList();
     fetchGames(lastName);
@@ -1298,6 +1341,7 @@ function renderPgnList() {
     cb.addEventListener('change', () => {
       if (cb.checked) state.analysisPgns.add(p.name);
       else state.analysisPgns.delete(p.name);
+      saveAnalysisPgns();
       updateSelectedPgnLabel();
     });
 
@@ -1312,6 +1356,7 @@ function renderPgnList() {
       // Klik na řádek (mimo checkbox) — aktivuj pro prohlížení partií a zároveň zaškrtni
       state.selectedPgn = p.name;
       state.analysisPgns.add(p.name);
+      saveAnalysisPgns();
       updateSelectedPgnLabel();
       renderPgnList();
       fetchGames(p.name);
