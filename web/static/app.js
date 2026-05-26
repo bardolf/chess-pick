@@ -74,6 +74,13 @@ const I18N = {
     pgn_include_for_analysis: 'Zahrnout do analýzy',
     pgn_multi_label: '{name} (+ {extra} další pro analýzu)',
     rule_header_multi: 'PGN {i}/{total} [{pgn}]',
+    stats_total: 'celkem',
+    stats_nodes: 'uzlů',
+    stats_positions: 'pozic',
+    stats_lifetime: 'průměr od startu',
+    stats_window: 'posl. {w}',
+    stats_engine_time: 'engine čas',
+    stats_no_data: '−',
     bubble_include: 'Zahrnout do PDF',
     bubble_click: 'Klikni pro načtení partie a skok na tuto pozici',
     pdf_export_progress: '⏳ PDF',
@@ -163,6 +170,13 @@ const I18N = {
     pgn_include_for_analysis: 'Include in analysis',
     pgn_multi_label: '{name} (+ {extra} more for analysis)',
     rule_header_multi: 'PGN {i}/{total} [{pgn}]',
+    stats_total: 'total',
+    stats_nodes: 'nodes',
+    stats_positions: 'positions',
+    stats_lifetime: 'lifetime avg',
+    stats_window: 'last {w}',
+    stats_engine_time: 'engine time',
+    stats_no_data: '−',
     bubble_include: 'Include in PDF',
     bubble_click: 'Click to load this game and jump to this position',
     pdf_export_progress: '⏳ PDF',
@@ -1053,6 +1067,7 @@ async function runAnalyze() {
   currentMatches = [];
   updateExportPdfButton();
   updateSelectAllButton();
+  clearEngineStats();
   let matchCount = 0;
   const startTime = Date.now();
   let aborted = false;
@@ -1125,6 +1140,54 @@ function stopAnalyze() {
   if (currentAbortController) currentAbortController.abort();
 }
 
+function formatNodes(n) {
+  if (n == null) return t('stats_no_data');
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'G';
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}
+
+function formatSeconds(s) {
+  if (s == null) return t('stats_no_data');
+  if (s < 60) return s.toFixed(1) + ' s';
+  if (s < 3600) return (s / 60).toFixed(1) + ' min';
+  return (s / 3600).toFixed(2) + ' h';
+}
+
+function renderEngineStats(data) {
+  const el = document.getElementById('engine-stats');
+  if (!el) return;
+  el.hidden = false;
+  const w = data.windows || {};
+  const parts = [];
+  parts.push(
+    `<span class="stat-group"><span class="stat-label">${t('stats_total')}</span>` +
+    `<span class="stat-value">${formatNodes(data.total_nodes)}</span> ${t('stats_nodes')}` +
+    ` / <span class="stat-value">${data.total_positions}</span> ${t('stats_positions')}` +
+    ` / <span class="stat-value">${formatSeconds(data.total_engine_time_s)}</span></span>`
+  );
+  parts.push(
+    `<span class="stat-group"><span class="stat-label">${t('stats_lifetime')}</span>` +
+    `<span class="stat-value">${formatNodes(data.lifetime_nps)}</span> nps</span>`
+  );
+  for (const k of ['1m', '5m', '30m', '1h']) {
+    const v = w[k];
+    parts.push(
+      `<span class="stat-group"><span class="stat-label">${t('stats_window', { w: k })}</span>` +
+      `<span class="stat-value">${formatNodes(v)}</span> nps</span>`
+    );
+  }
+  el.innerHTML = parts.join('');
+}
+
+function clearEngineStats() {
+  const el = document.getElementById('engine-stats');
+  if (!el) return;
+  el.hidden = true;
+  el.innerHTML = '';
+}
+
 function handleStreamMessage(msg, matchCount, prefix) {
   const out = document.getElementById('output-area');
   const h = document.getElementById('result-header');
@@ -1149,6 +1212,8 @@ function handleStreamMessage(msg, matchCount, prefix) {
       const scanned = msg.games_scanned !== undefined ? t('games_scanned_suffix', { n: msg.games_scanned }) : '';
       h.textContent = prefix + t('rule_header_done', { scanned, matches: msg.matches_total });
     }
+  } else if (msg.type === 'engine_stats') {
+    renderEngineStats(msg.data);
   } else if (msg.type === 'error') {
     out.innerHTML = '<div class="result-empty">' + escape(t('error_prefix') + msg.message) + '</div>';
   }

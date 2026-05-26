@@ -1,11 +1,84 @@
 from __future__ import annotations
 
 import sqlite3
+import time
+from collections import deque
 from pathlib import Path
-from typing import Optional
+from typing import Deque, Optional
 
 import chess
 import chess.engine
+
+
+class EnginePerfTracker:
+    """Sleduje výkon Stockfishe — kumulativně i v klouzavých oknech.
+
+    Frontend tyto údaje zobrazuje při dlouhých analýzách, aby uživatel viděl
+    jestli engine nezpomaluje (např. kvůli rostoucí transposition table nebo
+    saturaci disku při SQLite zápisech).
+    """
+
+    # Klouzavá okna (v sekundách)
+    WINDOWS: tuple[tuple[str, int], ...] = (
+        ("1m", 60),
+        ("5m", 300),
+        ("30m", 1800),
+        ("1h", 3600),
+    )
+
+    def __init__(self) -> None:
+        # (timestamp, nodes, engine_time_s) — nejstarší vlevo
+        self._samples: Deque[tuple[float, int, float]] = deque()
+        self.total_nodes: int = 0
+        self.total_positions: int = 0
+        self.total_engine_time_s: float = 0.0
+        self._started_at: float = time.time()
+
+    def record(self, nodes: int, elapsed_s: float) -> None:
+        if nodes <= 0 or elapsed_s <= 0:
+            return
+        now = time.time()
+        self._samples.append((now, nodes, elapsed_s))
+        self.total_nodes += nodes
+        self.total_positions += 1
+        self.total_engine_time_s += elapsed_s
+        # Odřízneme cokoliv staršího než nejdelší okno
+        max_window = self.WINDOWS[-1][1]
+        cutoff = now - max_window
+        while self._samples and self._samples[0][0] < cutoff:
+            self._samples.popleft()
+
+    def _window_nps(self, window_s: int) -> Optional[int]:
+        """NPS = ∑ nodes / ∑ engine_time_s pro samples v posledních `window_s`
+        sekundách (wall-clock). Tedy reálná rychlost enginu, ne efektivní
+        propustnost včetně režie. Vrací None pokud máme příliš málo dat."""
+        if not self._samples:
+            return None
+        now = time.time()
+        cutoff = now - window_s
+        in_window = [(n, e) for ts, n, e in self._samples if ts >= cutoff]
+        if not in_window:
+            return None
+        total_nodes = sum(n for n, _ in in_window)
+        total_time = sum(e for _, e in in_window)
+        # Statisticky relevantní výsledek až po >= 3 vzorcích nebo > 1s engine času.
+        if len(in_window) < 3 and total_time < 1.0:
+            return None
+        if total_time <= 0:
+            return None
+        return int(total_nodes / total_time)
+
+    def snapshot(self) -> dict:
+        return {
+            "total_nodes": self.total_nodes,
+            "total_positions": self.total_positions,
+            "total_engine_time_s": round(self.total_engine_time_s, 2),
+            "lifetime_nps": int(self.total_nodes / self.total_engine_time_s)
+                            if self.total_engine_time_s > 0 else 0,
+            "windows": {
+                label: self._window_nps(seconds) for label, seconds in self.WINDOWS
+            },
+        }
 
 
 class EvalCache:
@@ -19,8 +92,14 @@ class EvalCache:
     Pro pozici na hloubce D čteme všechny řádky a vrátíme prvních N podle multipv.
     """
 
-    def __init__(self, db_path: Path, engine: chess.engine.SimpleEngine) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        engine: chess.engine.SimpleEngine,
+        perf: Optional[EnginePerfTracker] = None,
+    ) -> None:
         self._engine = engine
+        self.perf = perf or EnginePerfTracker()
         self._conn = sqlite3.connect(str(db_path))
         self._conn.execute(
             """
@@ -66,10 +145,16 @@ class EvalCache:
             return [_row_to_info(r, board.turn) for r in rows[:multipv]]
 
         self.misses += 1
+        t0 = time.time()
         raw = self._engine.analyse(
             board, chess.engine.Limit(depth=depth), multipv=multipv
         )
+        elapsed = time.time() - t0
         infos = raw if isinstance(raw, list) else [raw]
+        # `nodes` je celkový počet uzlů prohledaných enginem v tomto volání
+        # (stejný napříč multipv variantami — bereme první).
+        nodes = int(infos[0].get("nodes", 0)) if infos else 0
+        self.perf.record(nodes, elapsed)
         self._conn.execute("DELETE FROM eval_cache WHERE fen=? AND depth=?", (fen, depth))
         self._conn.executemany(
             "INSERT INTO eval_cache(fen, depth, pv_index, score_cp, mate_in, move_uci) "

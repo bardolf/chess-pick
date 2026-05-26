@@ -656,7 +656,10 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int | No
         with chess.engine.SimpleEngine.popen_uci(sf_path) as engine:
             engine.configure({"Threads": threads, "Hash": hash_mb})
             with EvalCache(EVAL_DB, engine) as cache:
-                for ctx in find_positions(
+                def stats_cb():
+                    return {"type": "engine_stats", "data": cache.perf.snapshot()}
+
+                for item in find_positions(
                     games_with_index(),
                     cache,
                     game_rules=game_rules,
@@ -668,7 +671,14 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int | No
                     # ne jen první. Limit počtu výsledků řeší `limit` celkově.
                     max_per_game=None,
                     verbose=False,
+                    stats_callback=stats_cb,
+                    stats_interval_s=3.0,
                 ):
+                    # find_positions yieldne PositionContext (match) NEBO dict (stats).
+                    if isinstance(item, dict):
+                        yield _emit(item)
+                        continue
+                    ctx = item
                     try:
                         san_played = ctx.board.san(ctx.played_move)
                         best = ctx.best_move()
@@ -688,6 +698,8 @@ def _stream_engine(pgn_path: Path, rule_name: str, params: dict, limit: int | No
                     }
                     yield _emit({"type": "match", "data": data})
                     matches_found += 1
+                # poslední stats event před done
+                yield _emit({"type": "engine_stats", "data": cache.perf.snapshot()})
     except GeneratorExit:
         # klient se odpojil (Stop) — context managers (engine, cache) se uklidí samy
         return

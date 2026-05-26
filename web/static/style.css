@@ -382,6 +382,31 @@ body.light #open-in-lichess:hover { background: #3377dd; }
   font-size: 0.9em;
 }
 
+.engine-stats {
+  padding: 6px 12px;
+  background: #1f2a37;
+  border-bottom: 1px solid #2a3a4a;
+  font-family: 'Courier New', monospace;
+  font-size: 0.82em;
+  color: #b0c4d8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+.engine-stats[hidden] { display: none; }
+.engine-stats .stat-label { color: #7f96ad; margin-right: 4px; }
+.engine-stats .stat-value { color: #e0e8f0; font-weight: 600; }
+.engine-stats .stat-group { white-space: nowrap; }
+
+body.light .engine-stats {
+  background: #eef3fa;
+  color: #2a4060;
+  border-bottom-color: #d8e0ea;
+}
+body.light .engine-stats .stat-label { color: #5a738c; }
+body.light .engine-stats .stat-value { color: #102338; }
+
 .result-item {
   padding: 6px 8px;
   margin-bottom: 4px;

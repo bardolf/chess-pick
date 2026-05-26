@@ -457,9 +457,16 @@ def find_positions(
     limit: Optional[int] = None,
     max_per_game: Optional[int] = None,
     verbose: bool = True,
-) -> Iterator[PositionContext]:
+    stats_callback: Optional[Callable[[], Optional[dict]]] = None,
+    stats_interval_s: float = 3.0,
+) -> Iterator[Any]:
+    """Generátor yieldující `PositionContext` pro nálezy. Pokud je předaný
+    `stats_callback`, každých `stats_interval_s` sekund se navíc yieldne
+    `dict` (statistika) — caller pak rozlišuje podle typu (`isinstance`)."""
+    import time as _time
     yielded = 0
     games_analyzed = 0
+    last_stats_t = _time.time()
     for game in games:
         if not all(r.match(game) for r in game_rules):
             continue
@@ -498,6 +505,14 @@ def find_positions(
             prev_was_capture = board.is_capture(move)
             prev_move = move
             board.push(move)
+            # Periodicky vyzveme caller, jestli chce vydat stats event.
+            if stats_callback is not None:
+                now = _time.time()
+                if now - last_stats_t >= stats_interval_s:
+                    last_stats_t = now
+                    ev = stats_callback()
+                    if ev is not None:
+                        yield ev
         hits = getattr(analyser, "hits", 0) - hits_before
         misses = getattr(analyser, "misses", 0) - misses_before
         if verbose:
